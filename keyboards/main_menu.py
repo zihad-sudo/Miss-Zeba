@@ -1,63 +1,56 @@
-import json
-import os
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from utils import get_text
 
-# File Constants
-DEFAULTS_FILE = 'defaults.json'
-CUSTOM_FILE = 'custom_data.json'
+def main_menu():
+    """
+    Main Menu: Manual Layout
+    """
+    kb = InlineKeyboardMarkup()
 
-def load_json_file(filename):
-    """Safe file loader that returns an empty dict if file is missing/broken."""
-    if not os.path.exists(filename):
-        return {}
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        print(f"⚠️ Warning: Could not read {filename}")
-        return {}
+    # --- Row 1: Tools & Shop (Side by Side) ---
+    kb.row(
+        InlineKeyboardButton(get_text("main_btn_tools", "🛠 Tools"), callback_data="tools"),
+        InlineKeyboardButton(get_text("main_btn_shop", "🛒 Shop"), callback_data="shop")
+    )
+
+    # --- Row 2: Admin (Alone) ---
+    kb.add(
+        InlineKeyboardButton(get_text("main_btn_admin", "👮 Admin"), callback_data="admin")
+    )
+
+    # --- Row 3: Manager (Alone) ---
+    kb.add(
+        InlineKeyboardButton(get_text("main_btn_manager", "📢 Manager"), callback_data="manager")
+    )
+    
+    return kb
 
 def get_tools_layout():
     """
-    Loads defaults, checks for custom overrides, and builds the layout.
+    Tools Menu: Manual Layout
     """
-    # 1. Load the Base Data
-    final_data = load_json_file(DEFAULTS_FILE)
+    message_text = get_text("tools_message", "Select a tool:")
     
-    # 2. Load the Custom Data
-    custom_data = load_json_file(CUSTOM_FILE)
-    
-    # 3. Update Base with Custom (Only existing keys in custom will overwrite)
-    if custom_data:
-        final_data.update(custom_data)
+    kb = InlineKeyboardMarkup()
 
-    # 4. Extract content (Safe fallback if even defaults are broken)
-    text_content = final_data.get("tools_message", "⚠️ Menu Error: Content missing.")
-    buttons_list = final_data.get("tools_buttons", [])
-
-    # 5. Build Keyboard
-    kb = InlineKeyboardMarkup(row_width=2)
-    telebot_buttons = []
-    
-    for btn in buttons_list:
-        telebot_buttons.append(
-            InlineKeyboardButton(text=btn['text'], callback_data=btn['callback_data'])
-        )
-    
-    kb.add(*telebot_buttons)
-    
-    # Add a Back button (Optional but recommended for sub-menus)
-    kb.add(InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu_return"))
-
-    return text_content, kb
-
-# --- Main Menu (Unchanged) ---
-def main_menu():
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton("🛠 Tools", callback_data="tools"),
-        InlineKeyboardButton("🛒 Shop", callback_data="shop"),
-        InlineKeyboardButton("👮 Admin", callback_data="admin"),
-        InlineKeyboardButton("📢 Manager", callback_data="manager"),
+    # --- Row 1: Speed & URL (Side by Side) ---
+    kb.row(
+        InlineKeyboardButton(get_text("btn_speed", "🚀 Speed Test"), callback_data="tool_speed"),
+        InlineKeyboardButton(get_text("btn_url", "🔗 Url Shortener"), callback_data="tool_url")
     )
-    return kb
+
+    # --- Row 2: Downloader & Image (Side by Side) ---
+    kb.row(
+        InlineKeyboardButton(get_text("btn_dl", "📥 Downloader"), callback_data="tool_dl"),
+        InlineKeyboardButton(get_text("btn_img", "🎨 Image Editor"), callback_data="tool_img")
+    )
+
+    # --- Row 3: Weather (Alone) ---
+    kb.add(
+        InlineKeyboardButton(get_text("btn_weather", "🌤 Weather"), callback_data="tool_weather")
+    )
+
+    # --- Row 4: Back Button ---
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="main_menu_return"))
+    
+    return message_text, kb
