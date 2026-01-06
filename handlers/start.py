@@ -1,3 +1,4 @@
+#handelers/start.py
 from keyboards.main_menu import main_menu
 
 def register_start(bot):
