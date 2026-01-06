@@ -2,61 +2,64 @@
     "admin_menu_structure": {
         "start": [
             [
-                "📝 Edit Welcome Message",
+                "📝 Welcome Message",
                 "start_message"
             ]
         ],
         "main_menu": [
             [
-                "🔘 Tools Button Name",
+                "🔘 Tools Button",
                 "main_btn_tools"
             ],
             [
-                "🔘 Shop Button Name",
+                "🔘 Shop Button",
                 "main_btn_shop"
             ],
             [
-                "🔘 Admin Button Name",
+                "🔘 Admin Button",
                 "main_btn_admin"
             ],
             [
-                "🔘 Manager Button Name",
+                "🔘 Manager Button",
                 "main_btn_manager"
             ]
         ],
         "tools_menu": [
             [
-                "📝 Tools Menu Message",
+                "📝 Tools Message",
                 "tools_message"
             ],
             [
-                "🔧 Speed Test Button",
+                "🔧 Speed Test Name",
                 "btn_speed"
             ],
             [
-                "🔧 URL Shortener Button",
+                "🔧 URL Shortener Name",
                 "btn_url"
             ],
             [
-                "🔧 Downloader Button",
+                "🔧 Downloader Name",
                 "btn_dl"
             ],
             [
-                "🔧 Image Editor Button",
+                "🔧 Image Editor Name",
                 "btn_img"
             ],
             [
-                "🔧 Weather Button",
+                "🔧 Weather Name",
                 "btn_weather"
             ]
         ]
     },
-    "start_message": "Hshsbsbsbbsbs",
+    "admin_ids": [
+        5282609253
+    ],
+    "start_message": "👋 <b>Welcome to All-in-One</b>\n\nSystem deployed successfully.",
     "main_btn_tools": "🛠 Tools",
     "main_btn_shop": "🛒 Shop",
     "main_btn_admin": "👮 Admin",
     "main_btn_manager": "📢 Manager",
-    "tools_message": "🛠 <b>Select a Tool</b>\n\nHere are the tools currently available in the system:",
+    "tools_message": "🛠 <b>Select a Tool</b>\n\nHere are the tools currently available:",
     "btn_speed": "🚀 Speed Test",
     "btn_url": "🔗 Url Shortener",
     "btn_dl": "📥 Downloader",
