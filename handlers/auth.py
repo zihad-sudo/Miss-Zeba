@@ -1,4 +1,3 @@
-# handlers/auth.py
 import telebot
 from config import ADMIN_PASSWORD
 from utils import add_admin, is_admin
@@ -18,7 +17,8 @@ def register_auth_handlers(bot):
             return
             
         if text[1] == ADMIN_PASSWORD:
-            if add_admin(user_id, bot=bot):
+            # --- PASS CUSTOM COMMIT MESSAGE ---
+            if add_admin(user_id, bot=bot, commit_msg="New Admin Added"):
                 bot.reply_to(message, "🎉 <b>Success!</b> You are now an Admin.")
             else:
                 bot.reply_to(message, "❌ Error.")
