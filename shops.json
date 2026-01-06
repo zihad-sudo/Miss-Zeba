@@ -1,0 +1,44 @@
+{
+    "7936925985": {
+        "owner_id": 7936925985,
+        "name": "Testing Shop",
+        "description": "Welcome to my store!",
+        "products": {
+            "prod_1767725036": {
+                "name": "Bal",
+                "price": "400",
+                "image": "AgACAgUAAxkBAAIKCGldV92lTAXe_T_QLtQPsbXmXthiAAKSDGsbrk_pVuNmSKtpCLADAQADAgADeQADOAQ"
+            },
+            "prod_1767725056": {
+                "name": "Magi",
+                "price": "200",
+                "image": "AgACAgUAAxkBAAIKEGldV_svycT_KYpzCb6LwnUBWQnsAAKTDGsbrk_pVhjJBytvP-_gAQADAgADeQADOAQ"
+            },
+            "prod_1767725548": {
+                "name": "Bal",
+                "price": "200",
+                "image": "AgACAgUAAxkBAAIKCGldV92lTAXe_T_QLtQPsbXmXthiAAKSDGsbrk_pVuNmSKtpCLADAQADAgADeQADOAQ"
+            },
+            "prod_1767725560": {
+                "name": "Bal",
+                "price": "100",
+                "image": "AgACAgUAAxkBAAIKK2ldWfR9le3fwitSiTGFcYQ07cj2AAKUDGsbrk_pVr1u8boNmRrkAQADAgADeQADOAQ"
+            },
+            "prod_1767725575": {
+                "name": "Bal",
+                "price": "2002",
+                "image": "AgACAgUAAxkBAAIKM2ldWgI-Ru9pRMwiT8KDpPNrxLtfAAKVDGsbrk_pVt7N1_sBO5WFAQADAgADeQADOAQ"
+            },
+            "prod_1767725587": {
+                "name": "Bsbsb",
+                "price": "200",
+                "image": "AgACAgUAAxkBAAIKCGldV92lTAXe_T_QLtQPsbXmXthiAAKSDGsbrk_pVuNmSKtpCLADAQADAgADeQADOAQ"
+            },
+            "prod_1767725598": {
+                "name": "Hdhsbsn",
+                "price": "100",
+                "image": "AgACAgUAAxkBAAIKM2ldWgI-Ru9pRMwiT8KDpPNrxLtfAAKVDGsbrk_pVt7N1_sBO5WFAQADAgADeQADOAQ"
+            }
+        }
+    }
+}
