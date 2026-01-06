@@ -1,11 +1,9 @@
-# handlers/admin_panel.py
 import telebot
 import html
 import json
 import os
 import io
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-# Import load_users here
 from utils import get_text, set_text, get_data, reload_data, CUSTOM_FILE, send_backup, load_users
 
 DEFAULT_STRUCTURE = {
@@ -20,7 +18,9 @@ def send_admin_panel(bot, chat_id):
         label = category_key.replace("_", " ").title()
         kb.add(InlineKeyboardButton(f"📂 {label}", callback_data=f"adm_cat_{category_key}"))
     
-    # Analytics Button
+    # Broadcast (Handled in handlers/broadcast.py now)
+    kb.add(InlineKeyboardButton("📢 Broadcast Message", callback_data="adm_broadcast"))
+
     kb.add(InlineKeyboardButton("📊 Analytics & Users", callback_data="adm_analytics"))
 
     kb.add(
@@ -33,59 +33,33 @@ def send_admin_panel(bot, chat_id):
 
 def register_admin_handlers(bot):
     
-    # --- NEW: ANALYTICS HANDLER ---
+    # --- ANALYTICS ---
     @bot.callback_query_handler(func=lambda c: c.data == "adm_analytics")
     def show_analytics(call):
-        # Read from users.json
         users = load_users()
         total_users = len(users)
-        
-        text = (
-            f"📊 <b>Bot Analytics</b>\n\n"
-            f"👤 <b>Total Users:</b> {total_users}\n"
-            f"<i>(Data sourced from users.json)</i>"
-        )
-        
+        text = f"📊 <b>Bot Analytics</b>\n\n👤 <b>Total Users:</b> {total_users}\n<i>(Data sourced from users.json)</i>"
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("📜 Download User List (.txt)", callback_data="adm_export_users"))
         kb.add(InlineKeyboardButton("🔙 Back", callback_data="adm_home"))
-        
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=text,
-            reply_markup=kb
-        )
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text, reply_markup=kb)
 
-    # --- NEW: EXPORT USERS ---
     @bot.callback_query_handler(func=lambda c: c.data == "adm_export_users")
     def export_users(call):
         users = load_users()
-        
         if not users:
             bot.answer_callback_query(call.id, "❌ No users found yet.")
             return
-
-        # Create Text File Content
-        output = "USER ID | NAME | USERNAME | LAST ACTIVE\n"
-        output += "="*45 + "\n"
-        
+        output = "USER ID | NAME | USERNAME | LAST ACTIVE\n" + "="*45 + "\n"
         for uid, udata in users.items():
             name = udata.get("first_name", "Unknown")
             username = udata.get("username", "None")
-            # You could format timestamp here if you want
             output += f"{uid} | {name} | @{username}\n"
-            
         file_obj = io.BytesIO(output.encode('utf-8'))
         file_obj.name = "user_list.txt"
-        
-        bot.send_document(
-            call.message.chat.id,
-            file_obj,
-            caption=f"✅ <b>User List Export</b>\nTotal: {len(users)}"
-        )
+        bot.send_document(call.message.chat.id, file_obj, caption=f"✅ <b>User List Export</b>\nTotal: {len(users)}")
 
-    # --- EXISTING HANDLERS ---
+    # --- BACKUP & RESTORE ---
     @bot.callback_query_handler(func=lambda c: c.data == "adm_backup_dl")
     def download_backup(call):
         chat_id = call.message.chat.id
@@ -100,6 +74,7 @@ def register_admin_handlers(bot):
         msg = bot.send_message(call.message.chat.id, "⬆️ <b>Upload Settings</b>\nSend custom_data.json now.")
         bot.register_next_step_handler(msg, process_backup_upload, bot)
 
+    # --- DYNAMIC CATEGORIES ---
     @bot.callback_query_handler(func=lambda c: c.data.startswith("adm_cat_"))
     def open_category(call):
         category = call.data.replace("adm_cat_", "")
@@ -119,6 +94,7 @@ def register_admin_handlers(bot):
         msg = bot.send_message(call.message.chat.id, f"✏️ <b>Editing:</b> <code>{key}</code>\n\n<b>Current:</b>\n<code>{safe_display_text}</code>\n\n👇 <b>Send NEW text:</b>")
         bot.register_next_step_handler(msg, process_new_text, bot, key)
 
+    # --- NAVIGATION ---
     @bot.callback_query_handler(func=lambda c: c.data == "adm_home")
     def go_home(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -128,6 +104,7 @@ def register_admin_handlers(bot):
     def close_panel(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
 
+# --- PROCESS FUNCTIONS ---
 def process_backup_upload(message, bot):
     if not message.document:
         bot.reply_to(message, "❌ Not a file.")
