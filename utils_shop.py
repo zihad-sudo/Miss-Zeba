@@ -4,6 +4,10 @@ import time
 
 SHOPS_FILE = 'shops.json'
 
+# ==========================================
+# 💾 DATABASE CORE
+# ==========================================
+
 def load_shops():
     if os.path.exists(SHOPS_FILE):
         try:
@@ -34,7 +38,7 @@ def create_shop(user_id, name):
         "banner": None,
         "payment_info": "Contact Admin for payment.",
         "privacy": "public",
-        "subscription_price": 0,
+        "subscription_price": 0, # 0 = Free, >0 = Paid
         "channel_id": None,
         "auto_post": False,
         "approved_users": [],
@@ -48,66 +52,110 @@ def create_shop(user_id, name):
     }
     return save_shops(data)
 
-# --- ANALYTICS (NEW) ---
-def get_shop_analytics(user_id):
-    shop = get_shop(user_id)
-    if not shop: return None
+# ==========================================
+# 📦 PRODUCTS MANAGEMENT
+# ==========================================
+
+def add_product_to_shop(user_id, name, price, description, media_list, category_id=None):
+    data = load_shops()
+    uid = str(user_id)
+    if uid not in data: return False
+    if "products" not in data[uid]: data[uid]["products"] = {}
     
-    orders = shop.get("orders", {})
-    products = shop.get("products", {})
-    
-    stats = {
-        "revenue": 0.0,
-        "total_orders": len(orders),
-        "pending": 0,
-        "paid": 0,
-        "rejected": 0,
-        "members": len(shop.get("approved_users", [])),
-        "total_products": len(products),
-        "best_seller": "None"
+    prod_id = f"prod_{int(time.time())}"
+    data[uid]["products"][prod_id] = {
+        "name": name, "price": price, "description": description,
+        "media": media_list, "category": category_id, 
+        "status": "active", "use_thumbnail": True, "reviews": []
     }
-    
-    # Sales Tracking
-    sales_count = {} 
+    return save_shops(data)
 
-    for oid, o in orders.items():
-        status = o.get("status", "pending")
-        
-        if status == "pending":
-            stats["pending"] += 1
-        elif status == "rejected":
-            stats["rejected"] += 1
-        elif status == "paid":
-            stats["paid"] += 1
-            # Add Revenue
-            try: stats["revenue"] += float(o.get("price", 0))
-            except: pass
-            
-            # Track Popular Product
-            p_name = o.get("item", "Unknown")
-            sales_count[p_name] = sales_count.get(p_name, 0) + 1
+def update_product_field(user_id, prod_id, field, value):
+    data = load_shops()
+    uid = str(user_id)
+    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
+        data[uid]["products"][prod_id][field] = value
+        return save_shops(data)
+    return False
 
-    # Find Top Product
-    if sales_count:
-        top_item = max(sales_count, key=sales_count.get)
-        stats["best_seller"] = f"{top_item} ({sales_count[top_item]} sales)"
-        
-    return stats
+def toggle_product_thumbnail(user_id, prod_id):
+    data = load_shops()
+    uid = str(user_id)
+    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
+        current = data[uid]["products"][prod_id].get("use_thumbnail", True)
+        data[uid]["products"][prod_id]["use_thumbnail"] = not current
+        return save_shops(data)
+    return False
 
-# --- ORDERS ---
-def create_order(shop_id, buyer_id, buyer_name, item_name, price, proof_file_id, order_type="product"):
+def delete_product(user_id, prod_id):
+    data = load_shops()
+    uid = str(user_id)
+    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
+        del data[uid]["products"][prod_id]
+        return save_shops(data)
+    return False
+
+def toggle_product_status(user_id, prod_id):
+    data = load_shops()
+    uid = str(user_id)
+    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
+        current = data[uid]["products"][prod_id].get("status", "active")
+        new_status = "sold" if current == "active" else "active"
+        data[uid]["products"][prod_id]["status"] = new_status
+        return save_shops(data)
+    return False
+
+# ==========================================
+# 📂 CATEGORIES
+# ==========================================
+
+def create_category(user_id, name):
+    data = load_shops()
+    uid = str(user_id)
+    if uid not in data: return False
+    if "categories" not in data[uid]: data[uid]["categories"] = {}
+    cat_id = f"cat_{int(time.time())}"
+    data[uid]["categories"][cat_id] = name
+    return save_shops(data)
+
+def delete_category(user_id, cat_id):
+    data = load_shops()
+    uid = str(user_id)
+    if uid in data and "categories" in data[uid] and cat_id in data[uid]["categories"]:
+        del data[uid]["categories"][cat_id]
+        if "products" in data[uid]:
+            for pid in data[uid]["products"]:
+                if data[uid]["products"][pid].get("category") == cat_id:
+                    data[uid]["products"][pid]["category"] = None
+        return save_shops(data)
+    return False
+
+def get_categories(user_id):
+    data = load_shops()
+    return data.get(str(user_id), {}).get("categories", {})
+
+# ==========================================
+# 🛒 ORDERS & PAYMENTS (Supports Cart)
+# ==========================================
+
+def create_order(shop_id, buyer_id, buyer_name, item_summary, price, proof_file_id, order_type="product"):
+    """
+    item_summary: Can be single item name OR cart summary string.
+    order_type: 'product' or 'subscription'
+    """
     data = load_shops()
     sid = str(shop_id)
     if sid in data:
         if "orders" not in data[sid]: data[sid]["orders"] = {}
+        
         order_id = f"ord_{int(time.time())}_{buyer_id}"
         data[sid]["orders"][order_id] = {
             "buyer_id": buyer_id,
             "buyer_name": buyer_name,
-            "item": item_name,
+            "item": item_summary,
             "price": price,
             "proof": proof_file_id,
-            "type": order_type,
+            "type": order_type, 
             "status": "pending", 
             "date": int(time.time())
         }
@@ -124,13 +172,14 @@ def update_order_status(shop_id, order_id, status):
         return data[sid]["orders"][order_id]
     return None
 
-# --- [KEEP ALL EXISTING FUNCTIONS BELOW] ---
-# (Standard Functions: create_category, delete_category, get_categories, add_product, 
-#  update_product, toggle_thumb, delete_prod, toggle_status, update_desc, set_banner, 
-#  toggle_privacy, set_payment, set_channel, toggle_auto, schedule_post, get_due, 
-#  requests/access, manual_add, reviews, coupons, backup, subscription...)
+def set_payment_info(user_id, text):
+    data = load_shops()
+    uid = str(user_id)
+    if uid in data:
+        data[uid]["payment_info"] = text
+        return save_shops(data)
+    return False
 
-# RE-INCLUDING ESSENTIALS FOR COPY-PASTE:
 def set_subscription_price(user_id, price):
     data = load_shops()
     uid = str(user_id)
@@ -139,11 +188,16 @@ def set_subscription_price(user_id, price):
         return save_shops(data)
     return False
 
-def set_payment_info(user_id, text):
+# ==========================================
+# 👥 ACCESS & REQUESTS
+# ==========================================
+
+def toggle_shop_privacy(user_id):
     data = load_shops()
     uid = str(user_id)
     if uid in data:
-        data[uid]["payment_info"] = text
+        current = data[uid].get("privacy", "public")
+        data[uid]["privacy"] = "private" if current == "public" else "public"
         return save_shops(data)
     return False
 
@@ -192,103 +246,68 @@ def manual_add_buyer(shop_owner_id, target_id, name="Manual Add"):
             return save_shops(data)
     return False
 
-def create_category(user_id, name):
+# ==========================================
+# 🎫 COUPONS
+# ==========================================
+
+def create_coupon(user_id, code, discount_type, value):
     data = load_shops()
     uid = str(user_id)
     if uid not in data: return False
-    if "categories" not in data[uid]: data[uid]["categories"] = {}
-    cat_id = f"cat_{int(time.time())}"
-    data[uid]["categories"][cat_id] = name
+    if "coupons" not in data[uid]: data[uid]["coupons"] = {}
+    code = code.upper().strip()
+    data[uid]["coupons"][code] = {"type": discount_type, "value": float(value), "created_at": int(time.time())}
     return save_shops(data)
 
-def delete_category(user_id, cat_id):
+def delete_coupon(user_id, code):
     data = load_shops()
     uid = str(user_id)
-    if uid in data and "categories" in data[uid] and cat_id in data[uid]["categories"]:
-        del data[uid]["categories"][cat_id]
-        if "products" in data[uid]:
-            for pid in data[uid]["products"]:
-                if data[uid]["products"][pid].get("category") == cat_id:
-                    data[uid]["products"][pid]["category"] = None
+    if uid in data and "coupons" in data[uid] and code in data[uid]["coupons"]:
+        del data[uid]["coupons"][code]
         return save_shops(data)
     return False
 
-def get_categories(user_id):
+def get_coupons(user_id):
     data = load_shops()
-    return data.get(str(user_id), {}).get("categories", {})
+    return data.get(str(user_id), {}).get("coupons", {})
 
-def add_product_to_shop(user_id, name, price, description, media_list, category_id=None):
+def validate_coupon(shop_id, code):
     data = load_shops()
-    uid = str(user_id)
-    if uid not in data: return False
-    if "products" not in data[uid]: data[uid]["products"] = {}
-    prod_id = f"prod_{int(time.time())}"
-    data[uid]["products"][prod_id] = {
-        "name": name, "price": price, "description": description,
-        "media": media_list, "category": category_id, 
-        "status": "active", "use_thumbnail": True, "reviews": []
-    }
-    return save_shops(data)
+    shop = data.get(str(shop_id))
+    if not shop: return None
+    return shop.get("coupons", {}).get(code.upper().strip())
 
-def update_product_field(user_id, prod_id, field, value):
+# ==========================================
+# ⭐ REVIEWS & RATINGS
+# ==========================================
+
+def add_product_review(shop_id, prod_id, user_id, user_name, rating, text):
     data = load_shops()
-    uid = str(user_id)
-    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
-        data[uid]["products"][prod_id][field] = value
+    sid = str(shop_id)
+    if sid in data and prod_id in data[sid]["products"]:
+        prod = data[sid]["products"][prod_id]
+        if "reviews" not in prod: prod["reviews"] = []
+        for r in prod["reviews"]:
+            if r["user_id"] == user_id:
+                r["rating"] = rating; r["text"] = text; r["date"] = int(time.time())
+                return save_shops(data)
+        prod["reviews"].append({"user_id": user_id, "name": user_name, "rating": rating, "text": text, "date": int(time.time())})
         return save_shops(data)
     return False
 
-def toggle_product_thumbnail(user_id, prod_id):
+def get_product_reviews(shop_id, prod_id):
     data = load_shops()
-    uid = str(user_id)
-    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
-        current = data[uid]["products"][prod_id].get("use_thumbnail", True)
-        data[uid]["products"][prod_id]["use_thumbnail"] = not current
-        return save_shops(data)
-    return False
+    return data.get(str(shop_id), {}).get("products", {}).get(prod_id, {}).get("reviews", [])
 
-def delete_product(user_id, prod_id):
-    data = load_shops()
-    uid = str(user_id)
-    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
-        del data[uid]["products"][prod_id]
-        return save_shops(data)
-    return False
+def get_product_rating(shop_id, prod_id):
+    reviews = get_product_reviews(shop_id, prod_id)
+    if not reviews: return 0.0, 0
+    total = sum(r["rating"] for r in reviews)
+    return round(total / len(reviews), 1), len(reviews)
 
-def toggle_product_status(user_id, prod_id):
-    data = load_shops()
-    uid = str(user_id)
-    if uid in data and "products" in data[uid] and prod_id in data[uid]["products"]:
-        current = data[uid]["products"][prod_id].get("status", "active")
-        new_status = "sold" if current == "active" else "active"
-        data[uid]["products"][prod_id]["status"] = new_status
-        return save_shops(data)
-    return False
-
-def update_shop_desc(user_id, new_desc):
-    data = load_shops()
-    uid = str(user_id)
-    if uid in data:
-        data[uid]["description"] = new_desc
-        return save_shops(data)
-    return False
-
-def set_shop_banner(user_id, photo_id):
-    data = load_shops()
-    uid = str(user_id)
-    if uid in data:
-        data[uid]["banner"] = photo_id
-        return save_shops(data)
-    return False
-
-def toggle_shop_privacy(user_id):
-    data = load_shops()
-    uid = str(user_id)
-    if uid in data:
-        current = data[uid].get("privacy", "public")
-        data[uid]["privacy"] = "private" if current == "public" else "public"
-        return save_shops(data)
-    return False
+# ==========================================
+# 📢 CHANNEL & SCHEDULING
+# ==========================================
 
 def set_shop_channel(user_id, channel_id):
     data = load_shops()
@@ -335,56 +354,25 @@ def get_and_clear_due_posts():
     if modified: save_shops(data)
     return tasks_to_run
 
-def add_product_review(shop_id, prod_id, user_id, user_name, rating, text):
+# ==========================================
+# 📊 ANALYTICS & BACKUP
+# ==========================================
+
+def update_shop_desc(user_id, new_desc):
     data = load_shops()
-    sid = str(shop_id)
-    if sid in data and prod_id in data[sid]["products"]:
-        prod = data[sid]["products"][prod_id]
-        if "reviews" not in prod: prod["reviews"] = []
-        for r in prod["reviews"]:
-            if r["user_id"] == user_id:
-                r["rating"] = rating; r["text"] = text; r["date"] = int(time.time())
-                return save_shops(data)
-        prod["reviews"].append({"user_id": user_id, "name": user_name, "rating": rating, "text": text, "date": int(time.time())})
+    uid = str(user_id)
+    if uid in data:
+        data[uid]["description"] = new_desc
         return save_shops(data)
     return False
 
-def get_product_reviews(shop_id, prod_id):
-    data = load_shops()
-    return data.get(str(shop_id), {}).get("products", {}).get(prod_id, {}).get("reviews", [])
-
-def get_product_rating(shop_id, prod_id):
-    reviews = get_product_reviews(shop_id, prod_id)
-    if not reviews: return 0.0, 0
-    total = sum(r["rating"] for r in reviews)
-    return round(total / len(reviews), 1), len(reviews)
-
-def create_coupon(user_id, code, discount_type, value):
+def set_shop_banner(user_id, photo_id):
     data = load_shops()
     uid = str(user_id)
-    if uid not in data: return False
-    if "coupons" not in data[uid]: data[uid]["coupons"] = {}
-    code = code.upper().strip()
-    data[uid]["coupons"][code] = {"type": discount_type, "value": float(value), "created_at": int(time.time())}
-    return save_shops(data)
-
-def delete_coupon(user_id, code):
-    data = load_shops()
-    uid = str(user_id)
-    if uid in data and "coupons" in data[uid] and code in data[uid]["coupons"]:
-        del data[uid]["coupons"][code]
+    if uid in data:
+        data[uid]["banner"] = photo_id
         return save_shops(data)
     return False
-
-def get_coupons(user_id):
-    data = load_shops()
-    return data.get(str(user_id), {}).get("coupons", {})
-
-def validate_coupon(shop_id, code):
-    data = load_shops()
-    shop = data.get(str(shop_id))
-    if not shop: return None
-    return shop.get("coupons", {}).get(code.upper().strip())
 
 def get_shop_backup_data(user_id):
     data = load_shops()
@@ -399,3 +387,31 @@ def restore_shop_data(user_id, backup_data):
     data[uid] = backup_data
     if save_shops(data): return True, "Restored!"
     else: return False, "Save error."
+
+def get_shop_analytics(user_id):
+    shop = get_shop(user_id)
+    if not shop: return None
+    orders = shop.get("orders", {})
+    products = shop.get("products", {})
+    stats = {
+        "revenue": 0.0, "total_orders": len(orders), 
+        "pending": 0, "paid": 0, "rejected": 0, 
+        "members": len(shop.get("approved_users", [])), 
+        "total_products": len(products), 
+        "best_seller": "None"
+    }
+    sales_count = {} 
+    for oid, o in orders.items():
+        status = o.get("status", "pending")
+        if status == "pending": stats["pending"] += 1
+        elif status == "rejected": stats["rejected"] += 1
+        elif status == "paid":
+            stats["paid"] += 1
+            try: stats["revenue"] += float(o.get("price", 0))
+            except: pass
+            p_name = o.get("item", "Unknown")
+            sales_count[p_name] = sales_count.get(p_name, 0) + 1
+    if sales_count:
+        top_item = max(sales_count, key=sales_count.get)
+        stats["best_seller"] = f"{top_item} ({sales_count[top_item]} sales)"
+    return stats
