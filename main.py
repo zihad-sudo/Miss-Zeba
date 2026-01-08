@@ -5,7 +5,9 @@ from handlers.auth import register_auth_handlers
 from handlers.admin_panel import register_admin_handlers
 from handlers.broadcast import register_broadcast_handlers
 from handlers.shop_seller import register_seller_handlers
-from handlers.shop_buyer import register_buyer_handlers # <--- Add this
+from handlers.shop_buyer import register_buyer_handlers
+from handlers.shop_categories import register_category_handlers
+from handlers.shop_requests import register_request_handlers # <--- Ensure this line exists
 from handlers.callbacks import register_callbacks
 
 if not BOT_TOKEN:
@@ -13,13 +15,14 @@ if not BOT_TOKEN:
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
-# Register Handlers
 register_start(bot)
 register_auth_handlers(bot)
 register_admin_handlers(bot)
 register_broadcast_handlers(bot)
 register_seller_handlers(bot)
-register_buyer_handlers(bot) # <--- Register this
+register_buyer_handlers(bot)
+register_category_handlers(bot)
+register_request_handlers(bot) # <--- Register here
 register_callbacks(bot)
 
 print("🤖 Bot is running...")
