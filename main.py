@@ -13,7 +13,8 @@ from handlers.shop_requests import register_request_handlers
 from handlers.shop_social import register_social_handlers, post_product_to_channel
 from handlers.shop_coupons import register_coupon_handlers
 from handlers.shop_orders import register_order_handlers
-from handlers.shop_analytics import register_analytics_handlers # <--- ADDED
+from handlers.shop_analytics import register_analytics_handlers
+from handlers.shop_cart import register_cart_handlers # <--- Added
 from handlers.callbacks import register_callbacks
 from utils_shop import get_and_clear_due_posts
 
@@ -33,7 +34,8 @@ register_request_handlers(bot)
 register_social_handlers(bot)
 register_coupon_handlers(bot)
 register_order_handlers(bot)
-register_analytics_handlers(bot) # <--- REGISTERED
+register_analytics_handlers(bot)
+register_cart_handlers(bot) # <--- Register
 register_callbacks(bot)
 
 def scheduler_loop():
