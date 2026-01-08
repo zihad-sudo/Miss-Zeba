@@ -43,7 +43,8 @@ def register_request_handlers(bot):
             bot.answer_callback_query(call.id, "✅ Approved!")
             try: bot.send_message(target_id, "✅ <b>Access Granted!</b>")
             except: pass
-            view_pending(call)
+            try: view_pending(call)
+            except: pass
         else: bot.answer_callback_query(call.id, "Error.")
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("req_no_"))
@@ -51,7 +52,8 @@ def register_request_handlers(bot):
         target_id = int(call.data.replace("req_no_", ""))
         if deny_access(call.from_user.id, target_id):
             bot.answer_callback_query(call.id, "❌ Denied.")
-            view_pending(call)
+            try: view_pending(call)
+            except: pass
 
     @bot.callback_query_handler(func=lambda c: c.data == "shop_view_buyers")
     def view_buyers_list(call):
