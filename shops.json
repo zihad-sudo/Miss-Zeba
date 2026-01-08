@@ -172,6 +172,42 @@
         "categories": {
             "cat_1767899755": "Bal"
         },
-        "privacy": "private"
+        "privacy": "private",
+        "pending_requests": [
+            7256044108
+        ],
+        "customers": {
+            "5282609253": {
+                "first_name": "Sraboni",
+                "username": "Sraboni71"
+            },
+            "7256044108": {
+                "first_name": "Sraboni Rahman"
+            }
+        },
+        "approved_users": [
+            5282609253
+        ],
+        "payment_info": "Bkash/Nagad 01962554571",
+        "coupons": {
+            "UPTO10": {
+                "type": "percent",
+                "value": 10.0,
+                "created_at": 1767907925
+            }
+        },
+        "subscription_price": 1010.0,
+        "orders": {
+            "ord_1767908323_7256044108": {
+                "buyer_id": 7256044108,
+                "buyer_name": "Sraboni Rahman",
+                "item": "Shop Membership",
+                "price": "1010.0",
+                "proof": "AgACAgUAAxkBAAILSmlgI-TUvnRy0FzjtKVW4LVOQCmPAAJmDmsbUWEBV1EiaogpaZ3eAQADAgADeAADOAQ",
+                "type": "subscription",
+                "status": "rejected",
+                "date": 1767908323
+            }
+        }
     }
 }
