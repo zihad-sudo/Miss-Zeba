@@ -18,7 +18,7 @@ def get_session(user_id):
 
 def register_seller_handlers(bot):
     
-    # --- GLOBAL (Media) ---
+    # --- GLOBAL UPLOAD HANDLERS ---
     @bot.message_handler(content_types=['photo', 'video', 'animation'], func=lambda m: m.from_user.id in media_cache)
     def handle_media_upload(message):
         user_id = message.from_user.id
@@ -33,6 +33,7 @@ def register_seller_handlers(bot):
         user_id = message.from_user.id
         data = pending_data.get(user_id)
         files = media_cache.get(user_id, [])
+        
         if not data or not files: 
             bot.reply_to(message, "❌ No files sent.")
             clean_up(user_id)
@@ -76,9 +77,11 @@ def register_seller_handlers(bot):
         kb = InlineKeyboardMarkup(row_width=2)
         kb.add(InlineKeyboardButton("📦 Products", callback_data="shop_manage_menu"), InlineKeyboardButton("📂 Categories", callback_data="shop_cat_menu"))
         kb.add(InlineKeyboardButton(f"👁️ {privacy.title()}", callback_data="shop_tog_privacy"), InlineKeyboardButton(req_btn, callback_data="shop_req_menu"))
+        kb.add(InlineKeyboardButton("📢 Broadcast", callback_data="shop_broadcast"))
         kb.add(InlineKeyboardButton("➕ Add Product", callback_data="shop_add_prod"))
         kb.add(InlineKeyboardButton(f"🖼️ Banner: {banner_status}", callback_data="shop_set_banner"), InlineKeyboardButton("✏️ Desc", callback_data="shop_edit_info"))
         kb.add(InlineKeyboardButton("🔙 Back", callback_data="main_menu_return"))
+        
         try: bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=text, reply_markup=kb, disable_web_page_preview=True)
         except: bot.send_message(message.chat.id, text, reply_markup=kb, disable_web_page_preview=True)
 
@@ -87,7 +90,7 @@ def register_seller_handlers(bot):
         toggle_shop_privacy(call.from_user.id)
         show_dashboard(bot, call.message, get_shop(call.from_user.id))
 
-    # --- MANAGE LIST (Paginated) ---
+    # --- MANAGE PRODUCTS LIST ---
     @bot.callback_query_handler(func=lambda c: c.data == "shop_manage_menu")
     def init_manage_menu(call):
         seller_sessions[call.from_user.id] = {'page': 0, 'search': None, 'cat': None}
@@ -122,7 +125,6 @@ def register_seller_handlers(bot):
         nav.append(InlineKeyboardButton(f"📄 {session['page']+1}", callback_data="ignore"))
         if end < total: nav.append(InlineKeyboardButton("➡️", callback_data="sell_nav_next"))
         kb.row(*nav)
-        
         kb.row(InlineKeyboardButton(f"🔍 {session['search'] or 'Search'}", callback_data="sell_tool_search"), InlineKeyboardButton("❌ Clear", callback_data="sell_tool_clear"))
         kb.add(InlineKeyboardButton("🔙 Back", callback_data="my_business"))
         
@@ -162,7 +164,6 @@ def register_seller_handlers(bot):
         prod = shop['products'].get(prod_id)
         if not prod: return
         cat_name = shop.get("categories", {}).get(prod.get("category"), "None")
-        
         text = (f"📦 <b>{prod['name']}</b>\n💰 {prod['price']}\n📂 Cat: <b>{cat_name}</b>\n🖼️ Thumb: {'ON' if prod.get('use_thumbnail', True) else 'OFF'}\nStatus: {prod.get('status', 'active')}")
         kb = InlineKeyboardMarkup(row_width=2)
         kb.add(InlineKeyboardButton("👁️ Preview", callback_data=f"sh_prev_{prod_id}"))
@@ -192,7 +193,8 @@ def register_seller_handlers(bot):
     def process_prod_desc(message, bot, name, price):
         desc = message.text
         cats = get_categories(message.from_user.id)
-        if not cats: ask_for_media(message, bot, name, price, desc, None)
+        if not cats:
+            ask_for_media(message, bot, name, price, desc, None)
         else:
             kb = InlineKeyboardMarkup(row_width=2)
             for cid, cname in cats.items(): kb.add(InlineKeyboardButton(cname, callback_data=f"sel_cat_{cid}"))
@@ -220,7 +222,7 @@ def register_seller_handlers(bot):
             bot.send_message(message.chat.id, "✅ Shop Created!")
             show_dashboard(bot, message, get_shop(message.from_user.id))
 
-    # --- ACTIONS (Delete, Toggle, Banner, Edit) ---
+    # --- ACTIONS ---
     @bot.callback_query_handler(func=lambda c: c.data.startswith("sh_del_"))
     def delete_handler(call):
         if delete_product(call.from_user.id, call.data.replace("sh_del_", "")):
@@ -275,9 +277,6 @@ def register_seller_handlers(bot):
         call.data = f"sh_mng_{prod_id}"
         manage_single_product(call)
 
-    # Edit Name/Price/Desc/Media Handlers...
-    # (Include: edit_name_start, edit_price_start, edit_desc_start, edit_media_start, process_edit_field)
-    # Assumed copied from previous turn for brevity as they are standard. 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("ed_md_"))
     def edit_media_start(call):
         pid = call.data.replace("ed_md_", "")
@@ -309,7 +308,6 @@ def register_seller_handlers(bot):
             call_obj = type('obj', (object,), {'from_user': message.from_user, 'data': f"sh_mng_{pid}", 'message': message, 'id': '0'})
             manage_single_product(call_obj)
 
-    # Preview
     @bot.callback_query_handler(func=lambda c: c.data.startswith("sh_prev_"))
     def preview_product(call):
         prod_id = call.data.replace("sh_prev_", "")
@@ -318,7 +316,11 @@ def register_seller_handlers(bot):
         media_list = prod.get("media", [])
         if "image" in prod: media_list = [{"type": "photo", "file_id": prod["image"]}]
         use_thumbnail = prod.get("use_thumbnail", True)
-        caption = (f"📦 <b>{prod['name']}</b>\n💰 <b>Price:</b> {prod['price']}\n\n📝 {prod.get('description', '')}\n🏪 <b>Seller:</b> {shop['name']}")
+        cat_tag = ""
+        if prod.get("category"):
+            cat_name = shop.get("categories", {}).get(prod["category"], "")
+            if cat_name: cat_tag = f"\n🏷️ <b>#{cat_name}</b>"
+        caption = (f"📦 <b>{prod['name']}</b>\n💰 <b>Price:</b> {prod['price']}\n\n📝 {prod.get('description', '')}{cat_tag}\n\n🏪 <b>Seller:</b> {shop['name']}")
         kb = InlineKeyboardMarkup()
         if use_thumbnail and len(media_list) > 1: kb.add(InlineKeyboardButton("📂 Gallery", callback_data="dummy"))
         kb.add(InlineKeyboardButton("🔙 Back", callback_data=f"sh_mng_{prod_id}"))
