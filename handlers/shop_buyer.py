@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
-from utils_shop import get_shop, add_access_request, get_product_rating
+from utils_shop import get_shop, add_access_request, get_product_rating, validate_coupon, create_order
 
 buyer_sessions = {}
 ITEMS_PER_PAGE = 6
@@ -19,20 +19,120 @@ def register_buyer_handlers(bot):
         if not shop: 
             bot.answer_callback_query(call.id, "❌ Shop not found.")
             return
+
         user_id = call.from_user.id
         privacy = shop.get("privacy", "public")
-        approved = shop.get("approved_users", [])
-        if privacy == "private" and str(user_id) != str(shop['owner_id']) and user_id not in approved:
+        approved_users = shop.get("approved_users", [])
+        
+        # --- PRIVACY & SUBSCRIPTION CHECK ---
+        if privacy == "private" and str(user_id) != str(shop['owner_id']) and user_id not in approved_users:
             pending = shop.get("pending_requests", [])
+            sub_price = shop.get("subscription_price", 0)
+            
             kb = InlineKeyboardMarkup()
-            if user_id in pending: kb.add(InlineKeyboardButton("⏳ Pending", callback_data="ignore"))
-            else: kb.add(InlineKeyboardButton("✋ Request Access", callback_data=f"req_access_{shop_id}"))
+            if user_id in pending:
+                kb.add(InlineKeyboardButton("⏳ Request Pending...", callback_data="ignore"))
+            else:
+                if sub_price > 0:
+                    kb.add(InlineKeyboardButton(f"💳 Buy Access ({sub_price})", callback_data=f"buy_sub_start_{shop_id}_{sub_price}"))
+                else:
+                    kb.add(InlineKeyboardButton("✋ Request Access", callback_data=f"req_access_{shop_id}"))
+            
             kb.add(InlineKeyboardButton("🏠 Main Menu", callback_data="main_menu_return"))
-            try: bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="🔒 <b>Private Shop</b>", reply_markup=kb)
-            except: bot.send_message(call.message.chat.id, "🔒 <b>Private Shop</b>", reply_markup=kb)
+            
+            text = f"🔒 <b>Private Shop</b>\n"
+            if sub_price > 0: text += f"\n💰 <b>Entry Fee:</b> {sub_price}\nPurchase membership to view products."
+            else: text += "\nYou need approval to view this shop."
+            
+            try: bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text, reply_markup=kb, parse_mode="HTML")
+            except: bot.send_message(call.message.chat.id, text, reply_markup=kb, parse_mode="HTML")
             return
+
         buyer_sessions[user_id] = {'page': 0, 'cat': None, 'sort': 'new', 'search': None}
         render_shop_list(bot, call, shop_id)
+
+    # --- SUBSCRIPTION FLOW ---
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("buy_sub_start_"))
+    def buy_sub_step1(call):
+        parts = call.data.split("_")
+        shop_id = parts[3]
+        price = parts[4]
+        msg = f"🔐 <b>Unlock Shop Access</b>\n\n💰 Price: {price}\n\n👇 Do you have a coupon?"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🎟️ Apply Coupon", callback_data=f"sub_ask_coup_{shop_id}_{price}"))
+        kb.add(InlineKeyboardButton("✅ Proceed to Pay", callback_data=f"sub_fin_{shop_id}_{price}_NONE"))
+        kb.add(InlineKeyboardButton("❌ Cancel", callback_data="main_menu_return"))
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=msg, reply_markup=kb, parse_mode="HTML")
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("sub_ask_coup_"))
+    def sub_ask_coupon(call):
+        parts = call.data.split("_")
+        shop_id, price = parts[3], parts[4]
+        msg = bot.send_message(call.message.chat.id, "🎟️ <b>Enter Coupon Code:</b>")
+        bot.register_next_step_handler(msg, process_sub_coupon, bot, shop_id, price)
+
+    def process_sub_coupon(message, bot, shop_id, price):
+        code = message.text.strip()
+        coupon = validate_coupon(shop_id, code)
+        try:
+            original = float(price)
+            if coupon:
+                if coupon['type'] == 'percent': final = original - ((original * coupon['value']) / 100)
+                else: final = original - coupon['value']
+                if final < 0: final = 0
+                msg = f"✅ <b>Coupon Applied!</b>\nOriginal: {original}\n<b>New Price: {final}</b>"
+                kb = InlineKeyboardMarkup()
+                kb.add(InlineKeyboardButton("✅ Proceed to Pay", callback_data=f"sub_fin_{shop_id}_{final}_{code}"))
+                bot.send_message(message.chat.id, msg, reply_markup=kb, parse_mode="HTML")
+            else:
+                bot.send_message(message.chat.id, "❌ Invalid Coupon.")
+                kb = InlineKeyboardMarkup()
+                kb.add(InlineKeyboardButton("✅ Pay Original", callback_data=f"sub_fin_{shop_id}_{price}_NONE"))
+                bot.send_message(message.chat.id, f"💰 Price: {price}", reply_markup=kb)
+        except: bot.send_message(message.chat.id, "Error")
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("sub_fin_"))
+    def sub_ask_proof(call):
+        parts = call.data.split("_")
+        shop_id, price, code = parts[2], parts[3], parts[4]
+        shop = get_shop(shop_id)
+        pay_info = shop.get("payment_info", "Contact Seller")
+        msg = (f"🧾 <b>Payment Instructions</b>\n{pay_info}\n\n💰 <b>Total: {price}</b>\nFor: Shop Membership\n\n📸 <b>Send Payment Screenshot now.</b>")
+        sent = bot.send_message(call.message.chat.id, msg, parse_mode="HTML")
+        bot.register_next_step_handler(sent, process_sub_proof, bot, shop_id, price)
+
+    def process_sub_proof(message, bot, shop_id, price):
+        if message.content_type == 'photo':
+            file_id = message.photo[-1].file_id
+            order_id = create_order(shop_id, message.from_user.id, message.from_user.first_name, "Shop Membership", price, file_id, order_type="subscription")
+            # Also add to pending just in case, but Order system is primary
+            add_access_request(shop_id, message.from_user.id, {"first_name": message.from_user.first_name})
+            
+            bot.reply_to(message, "✅ <b>Proof Submitted!</b>\nWaiting for seller approval.")
+            
+            kb = InlineKeyboardMarkup(row_width=2)
+            kb.add(InlineKeyboardButton("✅ Approve", callback_data=f"ord_pay_ok_{shop_id}_{order_id}"),
+                   InlineKeyboardButton("❌ Reject", callback_data=f"ord_pay_no_{shop_id}_{order_id}"))
+            caption = (f"🔔 <b>New Membership Request #{order_id[-4:]}</b>\n👤 {message.from_user.first_name}\n💰 Paid: {price}\n👇 <b>Proof:</b>")
+            bot.send_photo(shop_id, file_id, caption=caption, reply_markup=kb, parse_mode="HTML")
+        else: bot.reply_to(message, "❌ Send photo.")
+
+    # --- STANDARD REQUEST (FREE) ---
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("req_access_"))
+    def handle_access_request(call):
+        shop_id = call.data.replace("req_access_", "")
+        user_info = {"first_name": call.from_user.first_name, "username": call.from_user.username or "None"}
+        if add_access_request(shop_id, call.from_user.id, user_info):
+            bot.answer_callback_query(call.id, "✅ Sent!", show_alert=True)
+            try:
+                seller_kb = InlineKeyboardMarkup(row_width=2)
+                seller_kb.add(InlineKeyboardButton("✅ Approve", callback_data=f"req_ok_{call.from_user.id}"), InlineKeyboardButton("❌ Deny", callback_data=f"req_no_{call.from_user.id}"))
+                bot.send_message(shop_id, f"🔔 <b>Request from {user_info['first_name']}</b>\nID: {call.from_user.id}", reply_markup=seller_kb, parse_mode="HTML")
+            except: pass
+            kb = InlineKeyboardMarkup()
+            kb.add(InlineKeyboardButton("⏳ Pending", callback_data="ignore"), InlineKeyboardButton("🏠 Main", callback_data="main_menu_return"))
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="🔒 <b>Request Sent</b>", reply_markup=kb)
+        else: bot.answer_callback_query(call.id, "❌ Error.")
 
     def render_shop_list(bot, call, shop_id):
         user_id = call.from_user.id
@@ -74,17 +174,6 @@ def register_buyer_handlers(bot):
             try: bot.delete_message(call.message.chat.id, call.message.message_id)
             except: pass
             bot.send_message(call.message.chat.id, text, reply_markup=kb)
-
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("req_access_"))
-    def handle_access_request(call):
-        shop_id = call.data.replace("req_access_", "")
-        user_info = {"first_name": call.from_user.first_name, "username": call.from_user.username or "None"}
-        if add_access_request(shop_id, call.from_user.id, user_info):
-            bot.answer_callback_query(call.id, "✅ Sent!", show_alert=True)
-            kb = InlineKeyboardMarkup()
-            kb.add(InlineKeyboardButton("⏳ Pending", callback_data="ignore"), InlineKeyboardButton("🏠 Main", callback_data="main_menu_return"))
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="🔒 <b>Request Sent</b>", reply_markup=kb)
-        else: bot.answer_callback_query(call.id, "❌ Error.")
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("buy_nav_"))
     def handle_nav(call):
@@ -142,10 +231,8 @@ def register_buyer_handlers(bot):
             shop = get_shop(shop_id)
             prod = shop["products"].get(prod_id)
             if not prod: return
-            
             avg_rating, count_rating = get_product_rating(shop_id, prod_id)
             rating_txt = f"⭐ {avg_rating} ({count_rating} reviews)" if count_rating > 0 else "⭐ New"
-            
             media_list = prod.get("media", [])
             if "image" in prod: media_list = [{"type": "photo", "file_id": prod["image"]}]
             use_thumbnail = prod.get("use_thumbnail", True)
@@ -157,7 +244,7 @@ def register_buyer_handlers(bot):
             kb = InlineKeyboardMarkup()
             if use_thumbnail and len(media_list) > 1: kb.add(InlineKeyboardButton("📂 View Full Gallery", callback_data=f"sh_gallery_{shop_id}_{prod_id}"))
             if prod.get("status") == "sold": kb.add(InlineKeyboardButton("❌ SOLD OUT", callback_data="sh_alert_sold"))
-            else: kb.add(InlineKeyboardButton("💬 Contact Seller to Buy", url=f"tg://user?id={shop_id}"))
+            else: kb.add(InlineKeyboardButton("⚡ Buy Now", callback_data=f"buy_step1_{shop_id}_{prod_id}"))
             kb.add(InlineKeyboardButton(f"⭐ Reviews ({count_rating})", callback_data=f"view_revs_{shop_id}_{prod_id}"), InlineKeyboardButton("✍️ Rate", callback_data=f"rate_prod_{shop_id}_{prod_id}"))
             kb.add(InlineKeyboardButton("🔙 Back to List", callback_data=f"view_prods_{shop_id}"))
             try: bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -193,3 +280,70 @@ def register_buyer_handlers(bot):
     @bot.callback_query_handler(func=lambda c: c.data == "sh_alert_sold")
     def alert_sold(call):
         bot.answer_callback_query(call.id, "🚫 Sold out!", show_alert=True)
+
+    # --- PRODUCT CHECKOUT FLOW ---
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("buy_step1_"))
+    def buy_step1(call):
+        parts = call.data.split("_")
+        shop_id, prod_id = parts[2], "_".join(parts[3:])
+        shop = get_shop(shop_id)
+        prod = shop["products"].get(prod_id)
+        try: price = float(prod['price'])
+        except: price = 0
+        msg = f"🛒 <b>Checkout</b>\n\n📦 <b>{prod['name']}</b>\n💰 Price: {prod['price']}\n\n👇 Do you have a coupon?"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🎟️ Apply Coupon", callback_data=f"ask_coup_{shop_id}_{prod_id}_{price}"))
+        kb.add(InlineKeyboardButton("✅ Confirm Order", callback_data=f"fin_buy_{shop_id}_{prod_id}_{price}_NONE"))
+        kb.add(InlineKeyboardButton("❌ Cancel", callback_data=f"sh_view_{shop_id}_{prod_id}"))
+        bot.send_message(call.message.chat.id, msg, reply_markup=kb, parse_mode="HTML")
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("ask_coup_"))
+    def ask_coupon(call):
+        parts = call.data.split("_")
+        shop_id, prod_id, price = parts[2], parts[3], parts[4]
+        msg = bot.send_message(call.message.chat.id, "🎟️ <b>Enter Coupon Code:</b>")
+        bot.register_next_step_handler(msg, process_coupon, bot, shop_id, prod_id, price)
+
+    def process_coupon(message, bot, shop_id, prod_id, price):
+        code = message.text.strip()
+        coupon = validate_coupon(shop_id, code)
+        try:
+            original = float(price)
+            if coupon:
+                if coupon['type'] == 'percent': final = original - ((original * coupon['value']) / 100)
+                else: final = original - coupon['value']
+                if final < 0: final = 0
+                msg = f"✅ <b>Coupon Applied!</b>\nOriginal: {original}\n<b>New Price: {final}</b>"
+                kb = InlineKeyboardMarkup()
+                kb.add(InlineKeyboardButton("✅ Confirm Order", callback_data=f"fin_buy_{shop_id}_{prod_id}_{final}_{code}"))
+                bot.send_message(message.chat.id, msg, reply_markup=kb, parse_mode="HTML")
+            else:
+                bot.send_message(message.chat.id, "❌ Invalid Coupon.")
+                kb = InlineKeyboardMarkup()
+                kb.add(InlineKeyboardButton("✅ Confirm Original", callback_data=f"fin_buy_{shop_id}_{prod_id}_{price}_NONE"))
+                bot.send_message(message.chat.id, f"💰 Price: {price}", reply_markup=kb)
+        except: bot.send_message(message.chat.id, "Error")
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("fin_buy_"))
+    def ask_payment_proof(call):
+        parts = call.data.split("_")
+        shop_id, prod_id, price, code = parts[2], parts[3], parts[4], parts[5]
+        shop = get_shop(shop_id)
+        pay_info = shop.get("payment_info", "Contact Seller")
+        msg = (f"🧾 <b>Payment Instructions</b>\n{pay_info}\n\n💰 <b>Total to Pay: {price}</b>\n\n📸 <b>Send Payment Screenshot now.</b>")
+        sent = bot.send_message(call.message.chat.id, msg, parse_mode="HTML")
+        bot.register_next_step_handler(sent, process_proof, bot, shop_id, prod_id, price)
+
+    def process_proof(message, bot, shop_id, prod_id, price):
+        if message.content_type == 'photo':
+            file_id = message.photo[-1].file_id
+            shop = get_shop(shop_id)
+            prod = shop["products"].get(prod_id)
+            order_id = create_order(shop_id, message.from_user.id, message.from_user.first_name, prod['name'], price, file_id, order_type="product")
+            bot.reply_to(message, "✅ <b>Proof Submitted!</b>\nWaiting for seller approval.")
+            kb = InlineKeyboardMarkup(row_width=2)
+            kb.add(InlineKeyboardButton("✅ Approve", callback_data=f"ord_pay_ok_{shop_id}_{order_id}"),
+                   InlineKeyboardButton("❌ Reject", callback_data=f"ord_pay_no_{shop_id}_{order_id}"))
+            caption = (f"🔔 <b>New Order #{order_id[-4:]}</b>\n👤 Buyer: {message.from_user.first_name}\n📦 Item: {prod['name']}\n💰 Price: {price}\n👇 <b>Payment Proof:</b>")
+            bot.send_photo(shop_id, file_id, caption=caption, reply_markup=kb, parse_mode="HTML")
+        else: bot.reply_to(message, "❌ Please send a screenshot.")
