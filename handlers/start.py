@@ -1,7 +1,7 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from keyboards.main_menu import main_menu
 from utils import get_text, track_user
-from utils_shop import get_shop # <--- Import this
+from utils_shop import get_shop
 
 def register_start(bot):
     @bot.message_handler(commands=["start"])
@@ -11,14 +11,12 @@ def register_start(bot):
         
         args = message.text.split()
         
-        # --- SCENARIO 1: VISITING A SHOP ---
-        # Checks if link looks like: /start shop_123456
+        # --- SHOP DEEP LINK ---
         if len(args) > 1 and args[1].startswith("shop_"):
             shop_owner_id = args[1].replace("shop_", "")
             shop = get_shop(shop_owner_id)
             
             if shop:
-                # Show the Shop Front (Buyer View)
                 text = (
                     f"🏪 <b>Welcome to {shop['name']}</b>\n"
                     f"<i>{shop['description']}</i>\n\n"
@@ -28,16 +26,22 @@ def register_start(bot):
                 kb.add(InlineKeyboardButton("📦 Browse Products", callback_data=f"view_prods_{shop_owner_id}"))
                 kb.add(InlineKeyboardButton("🏠 Create My Own Shop", callback_data="main_menu_return"))
                 
-                bot.send_message(message.chat.id, text, reply_markup=kb)
+                # --- CHECK FOR BANNER ---
+                if shop.get("banner"):
+                    # Send Photo with Caption
+                    bot.send_photo(
+                        message.chat.id,
+                        shop["banner"],
+                        caption=text,
+                        reply_markup=kb
+                    )
+                else:
+                    # Fallback to Text
+                    bot.send_message(message.chat.id, text, reply_markup=kb)
                 return
             else:
-                bot.send_message(message.chat.id, "❌ <b>Error:</b> This shop does not exist or was deleted.")
-                # Fall through to normal welcome
+                bot.send_message(message.chat.id, "❌ <b>Error:</b> Shop not found.")
         
-        # --- SCENARIO 2: NORMAL WELCOME ---
+        # --- NORMAL START ---
         welcome_text = get_text("start_message", "👋 Welcome!")
-        bot.send_message(
-            message.chat.id,
-            welcome_text,
-            reply_markup=main_menu(user_id)
-        )
+        bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu(user_id))
