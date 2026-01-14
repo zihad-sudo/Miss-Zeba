@@ -1,7 +1,7 @@
 import telebot
 import time
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils import load_users
+from utils.utils import load_users
 
 def register_broadcast_handlers(bot):
 
