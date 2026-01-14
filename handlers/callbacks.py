@@ -1,45 +1,79 @@
-# handlers/callbacks.py
-from utils import is_admin
-from keyboards.main_menu import get_tools_layout, main_menu
-
-# NOTE: Do NOT import handlers.admin_panel here at the top!
-# It causes the crash.
+from keyboards.main_menu import main_menu, tools_layout, tool_url_shorten_menu
+from utils.utils import is_admin
+from handlers.tools import url_shorten
 
 def register_callbacks(bot):
+
     @bot.callback_query_handler(func=lambda call: True)
     def handle_callbacks(call):
-        # ✅ FIX: Import INSIDE the function. 
-        # This prevents the circular error.
-        from handlers.admin_panel import send_admin_panel
-        
-        data = call.data
-        user_id = call.from_user.id
         chat_id = call.message.chat.id
         message_id = call.message.message_id
+        data = call.data
 
+        # ------------------------------
+        # Tools menu
+        # ------------------------------
         if data == "tools":
-            text, kb = get_tools_layout()
-            bot.send_message(chat_id, text, reply_markup=kb)
-            
+            text, kb = tools_layout()
+            try:
+                bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
+            except:
+                pass
+
+        # ------------------------------
+        # URL Shortener menu
+        # ------------------------------
+        elif data == "tool_url_shortener":
+            state = url_shorten.user_state.get(chat_id, {"emoji": True, "qr": True})
+            text, kb = tool_url_shorten_menu(chat_id, state)
+            try:
+                bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
+            except:
+                pass
+
+        # ------------------------------
+        # Toggle Emoji mode
+        # ------------------------------
+        elif data == "toggle_emoji":
+            state = url_shorten.user_state.get(chat_id, {"emoji": True, "qr": True})
+            state["emoji"] = not state["emoji"]
+            url_shorten.user_state[chat_id] = state
+            text, kb = tool_url_shorten_menu(chat_id, state)
+            try:
+                bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
+            except:
+                pass
+
+        # ------------------------------
+        # Toggle QR mode
+        # ------------------------------
+        elif data == "toggle_qr":
+            state = url_shorten.user_state.get(chat_id, {"emoji": True, "qr": True})
+            state["qr"] = not state["qr"]
+            url_shorten.user_state[chat_id] = state
+            text, kb = tool_url_shorten_menu(chat_id, state)
+            try:
+                bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
+            except:
+                pass
+
+        # ------------------------------
+        # Back to Main Menu
+        # ------------------------------
         elif data == "main_menu_return":
-            bot.delete_message(chat_id, message_id)
-            bot.send_message(
-                chat_id, 
-                "👋 <b>Welcome Back</b>", 
-                reply_markup=main_menu(user_id) 
-            )
+            kb = main_menu(chat_id)
+            try:
+                bot.edit_message_text(chat_id=chat_id, message_id=message_id, text="Welcome!", reply_markup=kb)
+            except:
+                pass
 
-        elif data == "admin":
-            if not is_admin(user_id):
-                bot.answer_callback_query(call.id, "⛔ Access Denied", show_alert=True)
-                return
-            # Now we use the imported function safely
-            send_admin_panel(bot, chat_id)
 
-        elif data == "shop":
-            bot.send_message(chat_id, "🛒 Shop coming soon")
-        elif data == "manager":
-            bot.send_message(chat_id, "📢 Manager coming soon")
-            
-        elif data.startswith("tool_"):
-            bot.answer_callback_query(call.id, f"Selected: {data}")
+    # ------------------------------
+    # Handle direct URL messages
+    # ------------------------------
+    @bot.message_handler(func=lambda message: True)
+    def handle_direct_url(message):
+        chat_id = message.chat.id
+        # If user clicked URL Shortener before, process directly
+        if chat_id in url_shorten.user_state:
+            url_shorten.process_url(bot, message)
