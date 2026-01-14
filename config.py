@@ -1,6 +1,6 @@
 import os
 
-BOT_TOKEN = ("8584791963:AAE7FBr0CjnApvPMnVL-m9cNMG5Z3h7zK3A")
+BOT_TOKEN = ("8584791963:AAGpCfvjqeQm2uUe06f_itEucVs_hVhN8B4")
 
 # The password to become an admin via /admin_login
 ADMIN_PASSWORD = "Admin" 
