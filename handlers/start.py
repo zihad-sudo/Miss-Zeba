@@ -1,7 +1,7 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from keyboards.main_menu import main_menu
-from utils import get_text, track_user
-from utils_shop import get_shop
+from utils.utils import get_text, track_user
+from utils.utils_shop import get_shop
 
 def register_start(bot):
     @bot.message_handler(commands=["start"])
