@@ -1,1 +1,45 @@
-{}
+{
+    "7936925985": {
+        "owner_id": 7936925985,
+        "name": "Bal",
+        "description": "Welcome to my store!",
+        "banner": null,
+        "payment_info": "Contact Admin for payment.",
+        "privacy": "private",
+        "subscription_price": 0,
+        "channel_id": null,
+        "auto_post": false,
+        "approved_users": [],
+        "pending_requests": [],
+        "scheduled_posts": [],
+        "customers": {},
+        "categories": {},
+        "products": {
+            "prod_1767973691": {
+                "name": "Bal",
+                "price": "200",
+                "description": "Ufffs",
+                "media": [
+                    {
+                        "type": "photo",
+                        "file_id": "AgACAgUAAxkBAAICiGlhIzrSituqTLptjDZDk4Sy3FvbAAIsD2sboj8JV5aP7FNm5nvaAQADAgADeAADOAQ"
+                    },
+                    {
+                        "type": "photo",
+                        "file_id": "AgACAgUAAxkBAAICiGlhIzrSituqTLptjDZDk4Sy3FvbAAIsD2sboj8JV5aP7FNm5nvaAQADAgADeAADOAQ"
+                    },
+                    {
+                        "type": "photo",
+                        "file_id": "AgACAgUAAxkBAAICimlhIzp9ykEHDaiNotCGp97cRlOyAAItD2sboj8JVz7b2vDyAduYAQADAgADeAADOAQ"
+                    }
+                ],
+                "category": null,
+                "status": "active",
+                "use_thumbnail": true,
+                "reviews": []
+            }
+        },
+        "coupons": {},
+        "orders": {}
+    }
+}
