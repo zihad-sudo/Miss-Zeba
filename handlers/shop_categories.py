@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils_shop import get_shop, create_category, delete_category, get_categories
+from utils.utils_shop import get_shop, create_category, delete_category, get_categories
 
 def register_category_handlers(bot):
 
