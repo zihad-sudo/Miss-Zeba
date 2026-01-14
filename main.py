@@ -16,7 +16,7 @@ from handlers.shop_orders import register_order_handlers
 from handlers.shop_analytics import register_analytics_handlers
 from handlers.shop_cart import register_cart_handlers # <--- Added
 from handlers.callbacks import register_callbacks
-from utils_shop import get_and_clear_due_posts
+from utils.utils_shop import get_and_clear_due_posts
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is missing")
