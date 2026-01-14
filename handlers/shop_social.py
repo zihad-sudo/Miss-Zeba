@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
-from utils_shop import get_shop, add_product_review, get_product_reviews
+from utils.utils_shop import get_shop, add_product_review, get_product_reviews
 
 review_sessions = {}
 
