@@ -1,6 +1,6 @@
 import telebot
 from config import ADMIN_PASSWORD
-from utils import add_admin, is_admin
+from utils.utils import add_admin, is_admin
 
 def register_auth_handlers(bot):
     @bot.message_handler(commands=['admin_login'])
