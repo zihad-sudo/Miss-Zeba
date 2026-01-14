@@ -1,58 +1,54 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils import get_text, is_admin
+from utils.utils import get_text, is_admin
 
+# -------------------------------
+# Main Menu
+# -------------------------------
 def main_menu(user_id):
-    """
-    Main Menu Keyboard.
-    - Shows 'Admin' button ONLY if the user is an admin.
-    - Shows 'My Business' for the shop system.
-    """
     kb = InlineKeyboardMarkup(row_width=2)
-    
-    # Row 1: Tools & Marketplace
-    btn_tools = InlineKeyboardButton(get_text("main_btn_tools", "🛠 Tools"), callback_data="tools")
-    btn_shop = InlineKeyboardButton(get_text("main_btn_shop", "🛒 Marketplace"), callback_data="shop")
-    kb.row(btn_tools, btn_shop)
-
-    # Row 2: My Business (New Shop System)
-    btn_business = InlineKeyboardButton("💼 My Business", callback_data="my_business")
-    kb.add(btn_business)
-
-    # Row 3: Admin Button (Conditional)
+    kb.row(
+        InlineKeyboardButton("🛠 Tools", callback_data="tools"),
+        InlineKeyboardButton("🛒 Marketplace", callback_data="shop")
+    )
+    kb.add(InlineKeyboardButton("💼 My Business", callback_data="my_business"))
     if is_admin(user_id):
-        btn_admin = InlineKeyboardButton(get_text("main_btn_admin", "👮 Admin"), callback_data="admin")
-        kb.add(btn_admin)
-
-    # Row 4: Manager Button
-    btn_manager = InlineKeyboardButton(get_text("main_btn_manager", "📢 Manager"), callback_data="manager")
-    kb.add(btn_manager)
-    
+        kb.add(InlineKeyboardButton("👮 Admin", callback_data="admin"))
+    kb.add(InlineKeyboardButton("📢 Manager", callback_data="manager"))
     return kb
 
-def get_tools_layout():
+# -------------------------------
+# Tools menu
+# -------------------------------
+def tools_layout():
+    kb = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton("🚀 Speed Test", callback_data="tool_speed"),
+        InlineKeyboardButton("🔗 URL Shortener", callback_data="tool_url_shortener")
+    )
+    kb.row(
+        InlineKeyboardButton("📥 Downloader", callback_data="tool_dl"),
+        InlineKeyboardButton("🎨 Image Editor", callback_data="tool_img")
+    )
+    kb.add(InlineKeyboardButton("🌤 Weather", callback_data="tool_weather"))
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="main_menu_return"))
+    return "Select a tool:", kb
+
+# -------------------------------
+# URL Shortener menu (shows emoji/QR state)
+# -------------------------------
+def tool_url_shorten_menu(chat_id, state):
     """
-    Layout for the Tools Menu.
-    Returns: (message_text, keyboard_markup)
+    state: {"emoji": True/False, "qr": True/False}
     """
-    message_text = get_text("tools_message", "Select a tool:")
-    
+    message_text = "Send the URL to shorten or customize:"
     kb = InlineKeyboardMarkup()
 
-    # Row 1
+    emoji_text = "✅ Emoji Mode ON" if state.get("emoji", True) else "❌ Emoji Mode OFF"
+    qr_text = "✅ QR Mode ON" if state.get("qr", True) else "❌ QR Mode OFF"
+
     kb.row(
-        InlineKeyboardButton(get_text("btn_speed", "🚀 Speed Test"), callback_data="tool_speed"),
-        InlineKeyboardButton(get_text("btn_url", "🔗 Url Shortener"), callback_data="tool_url")
+        InlineKeyboardButton(emoji_text, callback_data="toggle_emoji"),
+        InlineKeyboardButton(qr_text, callback_data="toggle_qr")
     )
-    # Row 2
-    kb.row(
-        InlineKeyboardButton(get_text("btn_dl", "📥 Downloader"), callback_data="tool_dl"),
-        InlineKeyboardButton(get_text("btn_img", "🎨 Image Editor"), callback_data="tool_img")
-    )
-    # Row 3
-    kb.add(
-        InlineKeyboardButton(get_text("btn_weather", "🌤 Weather"), callback_data="tool_weather")
-    )
-    # Row 4: Back
-    kb.add(InlineKeyboardButton("🔙 Back", callback_data="main_menu_return"))
-    
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="tools"))
     return message_text, kb
