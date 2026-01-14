@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
-from utils_shop import get_shop, add_access_request, get_product_rating, validate_coupon, create_order
+from utils.utils_shop import get_shop, add_access_request, get_product_rating, validate_coupon, create_order
 
 buyer_sessions = {}
 ITEMS_PER_PAGE = 6
