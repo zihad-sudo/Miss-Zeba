@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils_shop import get_shop, validate_coupon, create_order
+from utils.utils_shop import get_shop, validate_coupon, create_order
 
 # Storage: {user_id: {'shop_id': '123', 'items': [ {id, name, price} ]}}
 cart_sessions = {}
