@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils_shop import get_shop, approve_access, deny_access, manual_add_buyer
+from utils.utils_shop import get_shop, approve_access, deny_access, manual_add_buyer
 
 def register_request_handlers(bot):
 
