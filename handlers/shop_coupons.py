@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils_shop import create_coupon, delete_coupon, get_coupons
+from utils.utils_shop import create_coupon, delete_coupon, get_coupons
 
 coupon_cache = {}
 
