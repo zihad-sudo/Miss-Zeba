@@ -3,7 +3,7 @@ import json
 import io
 import time
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
-from utils_shop import (
+from utils.utils_shop import (
     get_shop, create_shop, add_product_to_shop, update_shop_desc, 
     set_shop_banner, delete_product, toggle_product_status, 
     update_product_field, toggle_product_thumbnail, get_categories, 
