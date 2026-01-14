@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils_shop import update_order_status, approve_access
+from utils.utils_shop import update_order_status, approve_access
 
 def register_order_handlers(bot):
 
