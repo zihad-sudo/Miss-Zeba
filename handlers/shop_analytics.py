@@ -1,6 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils_shop import get_shop_analytics
+from utils.utils_shop import get_shop_analytics
 
 def register_analytics_handlers(bot):
 
