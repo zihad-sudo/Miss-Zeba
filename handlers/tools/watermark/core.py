@@ -1,8 +1,10 @@
 import os
 import traceback
 from telebot import types
+import uuid 
+from io import BytesIO
 from .data import get_wm_settings, save_wm_settings
-from .engine import apply_watermark_image, apply_watermark_video
+from .engine import apply_watermark_image, apply_watermark_video, generate_font_preview_image
 from .menus import *
 
 # 🛡️ Safe Import for Admin Check
@@ -127,18 +129,92 @@ def register_watermark_handlers(bot):
         safe_handle(c, lambda: refresh_main_menu(bot, c.message.chat.id, c.message.message_id))
 
     # --- FONTS ---
+        # core.py এর register_watermark_handlers এর ভেতর এটি রিপ্লেস করুন
+
+    # core.py এর register_watermark_handlers এর ভেতর এই দুটি হ্যান্ডলার আপডেট করুন
+
+    # ১. ফন্ট ম্যানেজারে ঢোকার হ্যান্ডলার (এখন আর ইমেজ দেখাবে না)
     @bot.callback_query_handler(func=lambda c: c.data == "wm_menu_fonts")
     def m_fonts(c):
-        safe_handle(c, lambda: send_menu(bot, c.message.chat.id, "🔠 **Font Manager**", get_font_menu(get_wm_settings(c.message.chat.id), c.from_user.id, "main"), c.message.message_id))
-
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_font_view_"))
-    def v_fonts(c):
         def action():
-            v = c.data.replace("wm_font_view_", "")
-            t = "🌐 **Global Library**" if v=="all" else "❤️ **Favorites**"
-            send_menu(bot, c.message.chat.id, t, get_font_menu(get_wm_settings(c.message.chat.id), c.from_user.id, v), c.message.message_id)
+            cid, mid = c.message.chat.id, c.message.message_id
+            settings = get_wm_settings(cid)
+            markup = get_font_menu(settings, c.from_user.id, "main")
+            
+            # এখানে শুধু টেক্সট মেনু পাঠানো হবে
+            txt = "🔠 **Font Manager**\n\nফন্ট প্রিভিউ দেখতে 'All Global Fonts' অথবা 'Favorites' এ ক্লিক করুন।"
+            send_menu(bot, cid, txt, markup, mid)
         safe_handle(c, action)
 
+    # ২. অল এবং ফেভারিট লিস্টের হ্যান্ডলার (এখানে ইমেজ দেখাবে)
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_font_list_"))
+    def v_fonts(c):
+        def action():
+            cid, mid = c.message.chat.id, c.message.message_id
+            view = c.data.replace("wm_font_list_", "")
+            
+            s = get_wm_settings(cid)
+            bot.answer_callback_query(c.id, "⌛ Loading Previews...")
+            
+            if view == "all":
+                target_fonts = [f for f in os.listdir(FONTS_DIR) if f.endswith(('.ttf', '.otf'))]
+                title = "🌐 **Global Library**"
+            else:
+                target_fonts = s.get('favorites', [])
+                title = "❤️ **Your Favorites**"
+
+            # ইমেজ জেনারেট করা
+            preview_img = generate_font_preview_image(FONTS_DIR, target_fonts)
+            markup = get_font_menu(s, c.from_user.id, view)
+            
+            if preview_img:
+                # যদি আগের মেসেজ টেক্সট থাকে তবে সেটি ডিলিট করে ফটো পাঠাবে
+                try: bot.delete_message(cid, mid)
+                except: pass
+                
+                caption = f"{title}\nনিচে ফন্টগুলোর স্টাইল প্রিভিউ দেওয়া হলো:"
+                sent = bot.send_photo(cid, preview_img, caption=caption, reply_markup=markup, parse_mode="Markdown")
+                last_menu_ids[cid] = sent.message_id
+            else:
+                send_menu(bot, cid, f"{title}\n\n(এই লিস্টে কোনো ফন্ট নেই)", markup, mid)
+        
+        safe_handle(c, action)
+
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_font_list_"))
+    def v_fonts(c):
+        def action():
+            cid = c.message.chat.id
+            mid = c.message.message_id
+            view = c.data.replace("wm_font_list_", "") # 'all' অথবা 'fav'
+            
+            s = get_wm_settings(cid)
+            bot.answer_callback_query(c.id, "⌛ Updating Preview...")
+            
+            # ভিউ অনুযায়ী ফন্ট লিস্ট তৈরি করা
+            if view == "all":
+                target_fonts = [f for f in os.listdir(FONTS_DIR) if f.endswith(('.ttf', '.otf'))]
+                title = "🌐 **Global Library**"
+            else:
+                target_fonts = s.get('favorites', [])
+                title = "❤️ **Your Favorites**"
+
+            # ইমেজ জেনারেট করা
+            preview_img = generate_font_preview_image(FONTS_DIR, target_fonts)
+            markup = get_font_menu(s, c.from_user.id, view)
+            caption = f"{title}\nনিচের ইমেজে আপনার সিলেক্ট করা লিস্টের প্রিভিউ দেখুন।"
+
+            if preview_img:
+                # আগের ফটো মেসেজ ডিলিট করে নতুন ফটো পাঠানো (টেলিগ্রামে ফটো এডিট করা জটিল তাই ডিলিট-সেন্ড ভালো)
+                try: bot.delete_message(cid, mid)
+                except: pass
+                sent = bot.send_photo(cid, preview_img, caption=caption, reply_markup=markup, parse_mode="Markdown")
+                last_menu_ids[cid] = sent.message_id
+            else:
+                send_menu(bot, cid, f"{title}\n(No fonts to show in this list)", markup, mid)
+        
+        safe_handle(c, action)
+        
     @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_fset_"))
     def set_font(c):
         def action():
