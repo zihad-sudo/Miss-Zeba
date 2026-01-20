@@ -14,23 +14,42 @@
         "scheduled_posts": [],
         "customers": {},
         "categories": {},
+        "products": {},
+        "coupons": {},
+        "orders": {}
+    },
+    "7186722291": {
+        "owner_id": 7186722291,
+        "name": "Test Shop",
+        "description": "Welcome to my store!",
+        "banner": "AgACAgUAAxkBAAIN8GloOZzYN7E7cYrH1Un8dOXMrCv6AAK4DmsblfxAV-q0QLtj6j-0AQADAgADeQADOAQ",
+        "payment_info": "Contact Admin for payment.",
+        "privacy": "private",
+        "subscription_price": 500.0,
+        "channel_id": null,
+        "auto_post": false,
+        "approved_users": [],
+        "pending_requests": [],
+        "scheduled_posts": [],
+        "customers": {},
+        "categories": {},
         "products": {
-            "prod_1767973691": {
-                "name": "Bal",
+            "prod_1768438234": {
+                "name": "Wifey",
                 "price": "200",
-                "description": "Ufffs",
+                "description": "My sexy wifey testing..",
                 "media": [
                     {
                         "type": "photo",
-                        "file_id": "AgACAgUAAxkBAAICiGlhIzrSituqTLptjDZDk4Sy3FvbAAIsD2sboj8JV5aP7FNm5nvaAQADAgADeAADOAQ"
+                        "file_id": "AgACAgUAAxkBAAIN8GloOZzYN7E7cYrH1Un8dOXMrCv6AAK4DmsblfxAV-q0QLtj6j-0AQADAgADeQADOAQ"
                     },
                     {
                         "type": "photo",
-                        "file_id": "AgACAgUAAxkBAAICiGlhIzrSituqTLptjDZDk4Sy3FvbAAIsD2sboj8JV5aP7FNm5nvaAQADAgADeAADOAQ"
+                        "file_id": "AgACAgUAAxkBAAIN-2loOdfOYzMajyn3DSJLP2cB10YRAAI_DWsbiVtJV0a6h3NfaFMcAQADAgADeQADOAQ"
                     },
                     {
-                        "type": "photo",
-                        "file_id": "AgACAgUAAxkBAAICimlhIzp9ykEHDaiNotCGp97cRlOyAAItD2sboj8JVz7b2vDyAduYAQADAgADeAADOAQ"
+                        "type": "video",
+                        "file_id": "CgACAgUAAxkBAAIN_GloOdj7ie7FI5uUVaJ4ZhJBks51AAIHGQACiVtJV_kWzZYz7JPVOAQ"
                     }
                 ],
                 "category": null,
