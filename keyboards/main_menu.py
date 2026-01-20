@@ -1,5 +1,12 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils.utils import get_text, is_admin
+
+# Utils ইম্পোর্ট করার চেষ্টা, না পেলে ডিফল্ট ভ্যালু
+try:
+    from utils.utils import get_text, is_admin
+except ImportError:
+    # যদি utils না থাকে তবে এই ফাংশনগুলো কাজ করবে
+    def is_admin(user_id): return False
+    def get_text(text): return text
 
 # -------------------------------
 # Main Menu
@@ -11,44 +18,30 @@ def main_menu(user_id):
         InlineKeyboardButton("🛒 Marketplace", callback_data="shop")
     )
     kb.add(InlineKeyboardButton("💼 My Business", callback_data="my_business"))
+    
+    # Admin চেক
     if is_admin(user_id):
         kb.add(InlineKeyboardButton("👮 Admin", callback_data="admin"))
+    
     kb.add(InlineKeyboardButton("📢 Manager", callback_data="manager"))
     return kb
 
 # -------------------------------
-# Tools menu
+# Tools menu (Updated)
 # -------------------------------
 def tools_layout():
     kb = InlineKeyboardMarkup()
     kb.row(
-        InlineKeyboardButton("🚀 Speed Test", callback_data="tool_speed"),
+        InlineKeyboardButton("🔥 Auto Save", url="https://t.me/MissZeba_Auto_Save_Bot"),
         InlineKeyboardButton("🔗 URL Shortener", callback_data="tool_url_shortener")
     )
     kb.row(
-        InlineKeyboardButton("📥 Downloader", callback_data="tool_dl"),
-        InlineKeyboardButton("🎨 Image Editor", callback_data="tool_img")
+        InlineKeyboardButton("🛡️ Group Manage", callback_data="open_management"),
+        InlineKeyboardButton("🎨 Watermark Studio", callback_data="tool_img")
     )
     kb.add(InlineKeyboardButton("🌤 Weather", callback_data="tool_weather"))
-    kb.add(InlineKeyboardButton("🔙 Back", callback_data="main_menu_return"))
-    return "Select a tool:", kb
-
-# -------------------------------
-# URL Shortener menu (shows emoji/QR state)
-# -------------------------------
-def tool_url_shorten_menu(chat_id, state):
-    """
-    state: {"emoji": True/False, "qr": True/False}
-    """
-    message_text = "Send the URL to shorten or customize:"
-    kb = InlineKeyboardMarkup()
-
-    emoji_text = "✅ Emoji Mode ON" if state.get("emoji", True) else "❌ Emoji Mode OFF"
-    qr_text = "✅ QR Mode ON" if state.get("qr", True) else "❌ QR Mode OFF"
-
-    kb.row(
-        InlineKeyboardButton(emoji_text, callback_data="toggle_emoji"),
-        InlineKeyboardButton(qr_text, callback_data="toggle_qr")
-    )
-    kb.add(InlineKeyboardButton("🔙 Back", callback_data="tools"))
-    return message_text, kb
+    
+    # মেইন মেনু রিটার্ন বাটন
+    kb.add(InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu_return"))
+    
+    return "🛠 **Select a Tool:**", kb
