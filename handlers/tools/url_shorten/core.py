@@ -70,8 +70,10 @@ def init_user(cid):
     if cid not in user_state:
         user_state[cid] = {
             'qr': True, 'emoji': False, 'color': 'black', 'style': 'square', 
-            'logo': None, 'action': None, 'page': 0, 'gradient': None
+            'logo': None, 'bg_image': None, # 🔥 নতুন ফিল্ড
+            'action': None, 'page': 0, 'gradient': None, 'bg_color': 'white'
         }
+
 
 def get_dashboard_menu(cid):
     init_user(cid); s = user_state[cid]
@@ -97,6 +99,11 @@ def get_dashboard_menu(cid):
         # ২. গ্রেডিয়েন্ট বাটন: এখানে বর্তমানে সিলেক্ট করা গ্রেডিয়েন্টের নাম দেখাবে
         grad_display = s['gradient'].title() if s['gradient'] else "None (Solid)"
         mk.add(types.InlineKeyboardButton(f"🌈 Gradient: {grad_display}", callback_data="url_menu_grad"))
+        
+        mk.add(
+    types.InlineKeyboardButton(f"🎨 FG: {s['color'].title()}", callback_data="url_menu_color"),
+    types.InlineKeyboardButton(f"🖼 BG: {s['bg_color'].title()}", callback_data="url_menu_bg")
+)
 
         mk.add(types.InlineKeyboardButton(f"🖼️ Logo: {'Set ✅' if s['logo'] else 'None ❌'}", callback_data="url_up_logo"))
         mk.add(types.InlineKeyboardButton("👁️ Preview Design", callback_data="url_preview"))
@@ -174,8 +181,17 @@ def get_theme_list_menu(themes, page, prefix, allow_create=False):
     total_pages = (len(themes) + items_per_page - 1) // items_per_page
     start = page * items_per_page; end = start + items_per_page
     chunk = themes[start:end]
-    if allow_create: mk.add(types.InlineKeyboardButton("➕ Save Current as New Theme", callback_data="thm_create_new"))
-    for t in chunk: mk.add(types.InlineKeyboardButton(f"🎨 {t['name']} (by {t.get('author', 'Unknown')})", callback_data=f"{prefix}_view_{t['id']}"))
+    
+    if allow_create: 
+        mk.add(types.InlineKeyboardButton("✨ Create Premium Theme", callback_data="thm_create_new"))
+    
+    for t in chunk:
+        s = t['settings']
+        # লিস্টে থিমের স্টাইল ও কালার একনজরে দেখার জন্য
+        icon = "🌈" if s.get('gradient') else "🎨"
+        display_text = f"{icon} {t['name']} [{s['style'].title()}]"
+        mk.add(types.InlineKeyboardButton(display_text, callback_data=f"{prefix}_view_{t['id']}"))
+    
     nav = []
     if page > 0: nav.append(types.InlineKeyboardButton("⬅️", callback_data=f"{prefix}_pg_{page-1}"))
     nav.append(types.InlineKeyboardButton(f"📄 {page+1}/{max(1, total_pages)}", callback_data="ignore"))
@@ -183,6 +199,7 @@ def get_theme_list_menu(themes, page, prefix, allow_create=False):
     mk.row(*nav)
     mk.add(types.InlineKeyboardButton("🔙 Back to Dashboard", callback_data="url_home"))
     return mk
+
 
 def open_url_tool(bot, message, is_edit=False):
     cid = message.chat.id
@@ -224,17 +241,32 @@ def process_url(bot, message):
                 text = f"✅ **Link Ready!**\n\n🔗 {disp}\n🚀 `{short}`"
 
                 if s['qr']:
-                    # Pass Gradient
-                    qr_img = make_qr(short, s['style'], s['color'], s['logo'], gradient_name=s['gradient'])
+                    # 🔥 আপডেট: bg_color_name প্যারামিটার যোগ করা হয়েছে
+                    qr_img = make_qr(
+                        short, 
+                        s['style'], 
+                        s['color'], 
+                        s['logo'], 
+                        gradient_name=s['gradient'],
+                        bg_color_name=s['bg_color'],
+                      bg_image_data=s['bg_image']
+                          # এই লাইনটি নতুন যোগ করা হয়েছে
+                    )
+                    
                     if qr_img:
                         bot.delete_message(cid, msg.message_id)
                         bot.send_photo(cid, qr_img, caption=text, parse_mode="Markdown", reply_markup=get_dashboard_menu(cid))
-                    else: bot.edit_message_text(text, cid, msg.message_id, parse_mode="Markdown", reply_markup=get_dashboard_menu(cid))
-                else: bot.edit_message_text(text, cid, msg.message_id, parse_mode="Markdown", reply_markup=get_dashboard_menu(cid))
+                    else: 
+                        bot.edit_message_text(text, cid, msg.message_id, parse_mode="Markdown", reply_markup=get_dashboard_menu(cid))
+                else: 
+                    bot.edit_message_text(text, cid, msg.message_id, parse_mode="Markdown", reply_markup=get_dashboard_menu(cid))
             else:
                 err = r.json().get('message', 'API Error'); bot.edit_message_text(f"❌ Failed: {err}", cid, msg.message_id)
-        else: bot.edit_message_text(f"❌ Server Error: {r.status_code}", cid, msg.message_id)
-    except Exception as e: bot.edit_message_text(f"❌ Error: {str(e)[:50]}", cid, msg.message_id)
+        else: 
+            bot.edit_message_text(f"❌ Server Error: {r.status_code}", cid, msg.message_id)
+    except Exception as e: 
+        bot.edit_message_text(f"❌ Error: {str(e)[:50]}", cid, msg.message_id)
+
 
 # -------------------------------
 # 4. HANDLERS REGISTER
@@ -253,6 +285,99 @@ def register_url_handlers(bot):
                     except: pass
                     bot.send_photo(cid, img_bio, caption="🎨 **Select a Color:**", reply_markup=markup)
             else: bot.send_photo(cid, img_bio, caption="🎨 **Select a Color:**", reply_markup=markup)
+            
+    # --- bg handler ----
+    # --- 🖼 BACKGROUND COLOR HANDLERS ---
+    @bot.callback_query_handler(func=lambda c: c.data == "url_menu_bg")
+    def show_bg_menu(c):
+        cid = c.message.chat.id; init_user(cid)
+        img_bio = generate_palette_page(0) 
+        mk = get_color_menu(0)
+        
+        # বাটন এডিট: কালার বাটনের উপরে ইমেজ আপলোড বাটন
+        for row in mk.keyboard:
+            for btn in row:
+                if btn.callback_data.startswith("url_col_"):
+                    btn.callback_data = btn.callback_data.replace("url_col_", "url_setbg_")
+        
+        # 🔥 ইমেজ ব্যাকগ্রাউন্ড আপলোড বাটন
+        mk.row(types.InlineKeyboardButton("📷 Upload Background Image", callback_data="url_up_bg_img"))
+        if user_state[cid]['bg_image']:
+            mk.row(types.InlineKeyboardButton("🗑️ Remove BG Image", callback_data="url_rm_bg_img"))
+
+        caption = "🖼 **Background Settings:**\nChoose a solid color or upload a custom image."
+        # (edit_message_media লজিক আগের মতোই থাকবে)
+        try:
+            media = types.InputMediaPhoto(img_bio, caption=caption, parse_mode="Markdown")
+            bot.edit_message_media(media=media, chat_id=cid, message_id=c.message.message_id, reply_markup=mk)
+        except: pass
+
+    # --- ৩. ইমেজ ব্যাকগ্রাউন্ড আপলোড করার বাটন হ্যান্ডলার ---
+    @bot.callback_query_handler(func=lambda c: c.data == "url_up_bg_img")
+    def ask_bg_img(c):
+        cid = c.message.chat.id
+        init_user(cid)
+        user_state[cid]['action'] = 'waiting_bg_img' # ইউজারের অ্যাকশন সেট করা
+        try: bot.delete_message(cid, c.message.message_id)
+        except: pass
+        bot.send_message(cid, "🖼️ **Please send the photo now.**\nবট এই ছবিটিকে আপনার কিউআর কোডের ব্যাকগ্রাউন্ড হিসেবে সেট করবে।", parse_mode="Markdown")
+
+    # --- ৪. ইমেজ ব্যাকগ্রাউন্ড রিমুভ করার হ্যান্ডলার ---
+    @bot.callback_query_handler(func=lambda c: c.data == "url_rm_bg_img")
+    def remove_bg_img(c):
+        cid = c.message.chat.id
+        init_user(cid)
+        user_state[cid]['bg_image'] = None # ইমেজ ডাটা ক্লিয়ার করা
+        bot.answer_callback_query(c.id, "🗑️ Background image removed!")
+        open_url_tool(bot, c.message, is_edit=True)
+
+    # --- ৫. ফটো রিসিভ করার কম্বাইন্ড হ্যান্ডলার (লোগো + ব্যাকগ্রাউন্ড) ---
+    @bot.message_handler(content_types=['photo'])
+    def handle_all_photos(m):
+        cid = m.chat.id
+        init_user(cid)
+        action = user_state[cid].get('action')
+        
+        # যদি ইউজার ব্যাকগ্রাউন্ড ইমেজ পাঠায়
+        if action == 'waiting_bg_img':
+            try:
+                msg = bot.reply_to(m, "⏳ **Processing Background Image...**", parse_mode="Markdown")
+                file_info = bot.get_file(m.photo[-1].file_id)
+                downloaded_file = bot.download_file(file_info.file_path)
+                
+                user_state[cid]['bg_image'] = downloaded_file # মেমোরিতে সেভ
+                user_state[cid]['action'] = None # অ্যাকশন ক্লিয়ার
+                
+                bot.delete_message(cid, msg.message_id)
+                bot.reply_to(m, "✅ **Background Image successfully set!**", reply_markup=get_dashboard_menu(cid), parse_mode="Markdown")
+            except Exception as e:
+                bot.reply_to(m, "❌ ছবি সেভ করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।")
+        
+        # যদি ইউজার লোগো ইমেজ পাঠায়
+        elif action == 'waiting_logo':
+            try:
+                msg = bot.reply_to(m, "⏳ **Processing Logo...**", parse_mode="Markdown")
+                file_info = bot.get_file(m.photo[-1].file_id)
+                downloaded_file = bot.download_file(file_info.file_path)
+                
+                user_state[cid]['logo'] = downloaded_file
+                user_state[cid]['action'] = None
+                
+                bot.delete_message(cid, msg.message_id)
+                bot.reply_to(m, "✅ **Logo successfully set!**", reply_markup=get_dashboard_menu(cid), parse_mode="Markdown")
+            except Exception as e:
+                bot.reply_to(m, "❌ লোগো সেভ করতে সমস্যা হয়েছে।")
+
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("url_setbg_"))
+    def set_bg_color(c):
+        cid = c.message.chat.id
+        init_user(cid)
+        col = c.data.split("_")[-1]
+        user_state[cid]['bg_color'] = col
+        bot.answer_callback_query(c.id, f"✅ Background set to {col.title()}")
+        open_url_tool(bot, c.message, is_edit=True)
+
 
     # --- GRADIENT HANDLER ---
     # এটি register_url_handlers(bot): এর ভেতরে পেস্ট করুন (show_color_page এর নিচে)
@@ -402,31 +527,48 @@ def register_url_handlers(bot):
             else: bot.edit_message_text(text, cid, c.message.message_id, reply_markup=mk, parse_mode="Markdown")
         except: bot.send_message(cid, text, reply_markup=mk, parse_mode="Markdown")
 
+    # register_url_handlers(bot): এর ভেতরে এটি পেস্ট করুন
     @bot.callback_query_handler(func=lambda c: "_view_" in c.data)
     def view_theme(c):
-        cid = c.message.chat.id; theme_id = c.data.split("_")[-1]; is_global = c.data.startswith("gthm")
+        cid = c.message.chat.id
+        theme_id = c.data.split("_")[-1]
+        is_global = c.data.startswith("gthm")
+        
         source = get_global_themes() if is_global else get_user_themes(cid)
         theme = next((t for t in source if t['id'] == theme_id), None)
-        if not theme: bot.answer_callback_query(c.id, "❌ Theme not found."); return
+        
+        if not theme: 
+            bot.answer_callback_query(c.id, "❌ Theme not found.")
+            return
 
         s = theme['settings']
-        # Preview with Gradient
-        qr_img = make_qr("https://t.me/MissZeba_bot", s['style'], s['color'], None, gradient_name=s.get('gradient'))
+        qr_img = make_qr("https://t.me/MissZeba_bot", s['style'], s['color'], None, gradient_name=s.get('gradient')),
+        bg_color_name=s.get('bg_color', 'white')
         
         if qr_img:
             mk = types.InlineKeyboardMarkup()
             if is_global:
-                mk.add(types.InlineKeyboardButton("⬇️ Add to My Themes", callback_data=f"thm_save_{theme_id}"))
+                mk.add(types.InlineKeyboardButton("⭐ Add to My Favorites", callback_data=f"thm_save_{theme_id}"))
                 mk.add(types.InlineKeyboardButton("🔙 Back to Gallery", callback_data="thm_browse_0"))
             else:
-                mk.add(types.InlineKeyboardButton("✅ Apply Theme", callback_data=f"thm_apply_{theme_id}"))
-                mk.row(types.InlineKeyboardButton("🌍 Publish", callback_data=f"thm_pub_{theme_id}"), types.InlineKeyboardButton("🗑️ Delete", callback_data=f"thm_del_{theme_id}"))
+                mk.add(types.InlineKeyboardButton("🚀 Apply Theme", callback_data=f"thm_apply_{theme_id}"))
+                mk.row(
+                    types.InlineKeyboardButton("🌍 Publish Global", callback_data=f"thm_pub_{theme_id}"),
+                    types.InlineKeyboardButton("🗑️ Delete", callback_data=f"thm_del_{theme_id}")
+                )
                 mk.add(types.InlineKeyboardButton("🔙 Back to My Themes", callback_data="thm_mine_0"))
             
-            caption = f"🎨 **Theme:** {theme['name']}\n👤 **Author:** {theme.get('author','Unknown')}\n\nStyle: `{s['style']}` | Color: `{s['color']}` | Grad: `{s.get('gradient', 'None')}`"
+            # 🔥 Usage Counter সহ ক্যাপশন
+            uses_count = theme.get('uses', 0)
+            caption = (f"🎨 **Theme:** {theme['name']}\n"
+                       f"👤 **Author:** {theme.get('author','Unknown')}\n"
+                       f"🔥 **Used:** `{uses_count} times`\n\n"
+                       f"Style: `{s['style']}` | Color: `{s['color']}` | Grad: `{s.get('gradient', 'None')}`")
+            
             try: bot.delete_message(cid, c.message.message_id)
             except: pass
             bot.send_photo(cid, qr_img, caption=caption, reply_markup=mk, parse_mode="Markdown")
+
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("thm_save_"))
     def save_theme_to_mine(c):
@@ -439,14 +581,30 @@ def register_url_handlers(bot):
 
     @bot.callback_query_handler(func=lambda c: c.data.startswith("thm_apply_"))
     def apply_theme(c):
-        cid = c.message.chat.id; theme_id = c.data.split("_")[-1]
-        theme = next((t for t in get_user_themes(cid) if t['id'] == theme_id), None)
-        if theme:
-            s = theme['settings']; init_user(cid)
-            user_state[cid].update({'color': s['color'], 'style': s['style'], 'gradient': s.get('gradient')})
-            bot.answer_callback_query(c.id, "✅ Applied!"); open_url_tool(bot, c.message, is_edit=False)
-        else: bot.answer_callback_query(c.id, "❌ Error.")
+        cid = c.message.chat.id
+        theme_id = c.data.split("_")[-1]
+        all_user_themes = load_json(USER_THEMES_FILE, {})
+        
+        if str(cid) in all_user_themes:
+            for t in all_user_themes[str(cid)]:
+                if t['id'] == theme_id:
+                    s = t['settings']
+                    init_user(cid)
+                    user_state[cid].update({
+                        'color': s['color'], 
+                        'style': s['style'], 
+                        'gradient': s.get('gradient')
+                    })
+                    # 🔥 ব্যবহার সংখ্যা ১ বাড়ানো
+                    t['uses'] = t.get('uses', 0) + 1
+                    save_json(USER_THEMES_FILE, all_user_themes)
+                    
+                    bot.answer_callback_query(c.id, "✅ Theme Applied & Synced!") 
+                    open_url_tool(bot, c.message, is_edit=False)
+                    return
+        bot.answer_callback_query(c.id, "❌ Error applying theme.")
 
+    
     @bot.callback_query_handler(func=lambda c: c.data.startswith("thm_del_"))
     def delete_theme_action(c):
         cid = c.message.chat.id; theme_id = c.data.split("_")[-1]
@@ -470,25 +628,54 @@ def register_url_handlers(bot):
 
     @bot.message_handler(func=lambda m: user_state.get(m.chat.id, {}).get('action') == 'waiting_theme_name')
     def save_theme_name(m):
-        cid = m.chat.id; name = m.text.strip()
+        import datetime
+        cid = m.chat.id
+        name = m.text.strip()
         if len(name) > 20: name = name[:20]
         s = user_state[cid]
+        
+        # নতুন মেটাডাটা সহ প্রফেশনাল থিম অবজেক্ট
         new_theme = {
-            "id": str(uuid.uuid4())[:8], "name": name, "author": m.from_user.first_name,
-            "settings": {"color": s['color'], "style": s['style'], "gradient": s.get('gradient')}
+            "id": str(uuid.uuid4())[:8],
+            "name": name,
+            "author": m.from_user.first_name,
+            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "uses": 0, # শুরুতে ব্যবহার সংখ্যা ০
+            "settings": {
+                "color": s['color'],
+                "bg_color": s['bg_color'],
+                "style": s['style'],
+                "gradient": s.get('gradient'),
+                "logo_enabled": True if s['logo'] else False,
+                "eye_style": s.get('eye_style', 'square'),
+                "data_pattern": s.get('data_pattern', 'standard')
+            }
         }
-        add_user_theme(cid, new_theme); user_state[cid]['action'] = None
-        bot.reply_to(m, f"✅ Theme **{name}** saved!", reply_markup=get_dashboard_menu(cid))
+        add_user_theme(cid, new_theme)
+        user_state[cid]['action'] = None
+        bot.reply_to(m, f"✅ Theme **{name}** saved with advanced config!", reply_markup=get_dashboard_menu(cid))
 
+    
     @bot.callback_query_handler(func=lambda c: c.data == "url_preview")
     def show_preview(c):
         cid = c.message.chat.id; init_user(cid); s = user_state[cid]
-        qr_img = make_qr("https://t.me/MissZeba_bot", s['style'], s['color'], s['logo'], gradient_name=s['gradient'])
+        
+        # 🔥 এখানে bg_color_name=s['bg_color'] যোগ করা হয়েছে
+        qr_img = make_qr(
+            "https://t.me/MissZeba_bot", 
+            s['style'], 
+            s['color'], 
+            s['logo'], 
+            gradient_name=s['gradient'],
+            bg_color_name=s['bg_color'],
+            bg_image_data=s['bg_image']
+        )
+        
         if qr_img:
             try: bot.delete_message(cid, c.message.message_id)
             except: pass
             back_mk = types.InlineKeyboardMarkup(); back_mk.add(types.InlineKeyboardButton("🔙 Back to Editor", callback_data="url_home"))
-            caption = f"👁️ **Preview**\n🎨 Color: `{s['color']}`\n💠 Style: `{s['style']}`\n🌈 Grad: `{s['gradient']}`"
+            caption = f"👁️ **Preview**\n🎨 Color: `{s['color']}`\n🖼️ BG: `{s['bg_color']}`\n💠 Style: `{s['style']}`\n🌈 Grad: `{s['gradient']}`"
             bot.send_photo(cid, qr_img, caption=caption, reply_markup=back_mk, parse_mode="Markdown")
 
     @bot.callback_query_handler(func=lambda c: c.data == "url_home")
