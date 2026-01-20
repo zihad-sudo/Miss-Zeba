@@ -155,16 +155,37 @@ def generate_gradient_palette_page(page_index):
 
 # -------------------------------
 # 4. QR GENERATOR
-# -------------------------------
-def make_qr(url, style='square', color_name='black', logo_data=None, gradient_name=None):
+def make_qr(url, style='square', color_name='black', logo_data=None, gradient_name=None, bg_color_name='white', bg_image_data=None):
     try:
+        colors = load_colors()
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
         qr.add_data(url); qr.make(fit=True)
+        
         matrix = qr.get_matrix(); box_size, border = 20, 4
         img_size = (len(matrix) + (border * 2)) * box_size
+        
+        # ১. ব্যাকগ্রাউন্ড নির্ধারণ (Image vs Color)
+        bg_hex = colors.get(bg_color_name, '#FFFFFF')
+        
+        if bg_image_data:
+            try:
+                bg_img = Image.open(BytesIO(bg_image_data)).convert("RGBA")
+                # স্কয়ার ক্রপ করা
+                w, h = bg_img.size
+                min_dim = min(w, h)
+                left, top = (w - min_dim)/2, (h - min_dim)/2
+                bg_img = bg_img.crop((left, top, left + min_dim, top + min_dim))
+                # কিউআর সাইজে রিসাইজ করা
+                bg_img = bg_img.resize((img_size, img_size), Image.Resampling.LANCZOS)
+                final_img = bg_img
+            except:
+                final_img = Image.new("RGBA", (img_size, img_size), bg_hex)
+        else:
+            final_img = Image.new("RGBA", (img_size, img_size), bg_hex)
+
+        # ২. MASK & COLOR Layer (Foreground)
         mask = Image.new("L", (img_size, img_size), 0)
         draw = ImageDraw.Draw(mask); fill_val = 255
-
         for y in range(len(matrix)):
             for x in range(len(matrix[y])):
                 if matrix[y][x]:
@@ -173,8 +194,6 @@ def make_qr(url, style='square', color_name='black', logo_data=None, gradient_na
                     cx, cy = l + (box_size/2), t + (box_size/2)
                     if style == 'round': draw.ellipse((l, t, r, b), fill=fill_val)
                     elif style == 'diamond': draw.polygon([(cx, t), (r, cy), (cx, b), (l, cy)], fill=fill_val)
-                    elif style == 'vertical': w=box_size*0.2; draw.rectangle((l+w, t, r-w, b), fill=fill_val)
-                    elif style == 'horizontal': h=box_size*0.2; draw.rectangle((l, t+h, r, b-h), fill=fill_val)
                     elif style == 'rounded': draw.rounded_rectangle((l, t, r, b), radius=box_size*0.3, fill=fill_val)
                     elif style == 'star': draw_star_shape(draw, cx, cy, box_size, fill_val)
                     else: draw.rectangle((l, t, r, b), fill=fill_val)
@@ -184,19 +203,19 @@ def make_qr(url, style='square', color_name='black', logo_data=None, gradient_na
             c_pair = grads.get(gradient_name, ["#000000", "#000000"])
             color_layer = create_linear_gradient(img_size, img_size, c_pair[0], c_pair[1])
         else:
-            colors = load_colors()
-            hex_col = colors.get(color_name, '#000000')
-            color_layer = Image.new("RGB", (img_size, img_size), hex_col)
+            color_layer = Image.new("RGB", (img_size, img_size), colors.get(color_name, '#000000'))
 
-        final_img = Image.new("RGBA", (img_size, img_size), "white")
-        final_img.paste(color_layer, (0,0), mask)
+        # ৩. মার্জ করা
+        final_img.paste(color_layer, (0, 0), mask)
         
+        # ৪. লোগো ইন্টিগ্রেশন
         if logo_data:
             try:
                 logo = Image.open(BytesIO(logo_data)).convert("RGBA")
                 l_s = int(img_size * 0.22)
                 logo = logo.resize((l_s, l_s), Image.Resampling.LANCZOS)
-                bg_l = Image.new("RGBA", (l_s+10, l_s+10), "white")
+                # লোগোর পেছনে একটু প্যাডিং (সাদা বা সলিড কালার দিলে ভালো দেখায়)
+                bg_l = Image.new("RGBA", (l_s+10, l_s+10), bg_hex if not bg_image_data else "white")
                 bg_l.paste(logo, (5, 5), logo)
                 pos = ((img_size - bg_l.width)//2, (img_size - bg_l.height)//2)
                 final_img.paste(bg_l, pos, bg_l)
