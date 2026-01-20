@@ -1,6 +1,8 @@
 import os
 import sys
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageColor
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageColor
 
 # =========================================================
 # 🛡️ FFmpeg CRASH PROTECTION
@@ -177,3 +179,45 @@ def apply_watermark_video(input_path, output_path, s, is_gif=False):
         try: video_clip.close()
         except: pass
         return False
+
+# engine.py এর generate_font_preview_image ফাংশনটি এভাবে আপডেট করুন
+
+def generate_font_preview_image(font_dir="data/fonts", font_list=None):
+    if not os.path.exists(font_dir): return None
+    
+    if font_list is None:
+        fonts = [f for f in os.listdir(font_dir) if f.endswith(('.ttf', '.otf'))]
+    else:
+        fonts = [f for f in font_list if f.endswith(('.ttf', '.otf'))]
+        
+    if not fonts: return None
+
+    width, line_height, padding = 800, 80, 40
+    img_height = (len(fonts) * line_height) + (padding * 2)
+    img = Image.new("RGB", (width, img_height), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    y = padding
+
+    for font_name in fonts:
+        try:
+            f_path = os.path.join(font_dir, font_name)
+            font = ImageFont.truetype(f_path, 40)
+            
+            # ফন্টের নাম থেকে এক্সটেনশন বাদ দিয়ে ডিসপ্লে নাম তৈরি
+            display_name = font_name.replace('.ttf', '').replace('.otf', '')
+            
+            # টাইটেল হিসেবে ফন্টের নাম (হালকা রঙে)
+            draw.text((20, y), f"{display_name}:", fill=(150, 150, 150))
+            
+            # 🔥 পরিবর্তন: প্রিভিউ টেক্সট হিসেবে সরাসরি ফন্টের নাম ব্যবহার করা হয়েছে
+            draw.text((20, y + 30), display_name, font=font, fill=(0, 0, 0))
+            
+            y += line_height
+        except:
+            continue
+
+    bio = BytesIO()
+    img.save(bio, "PNG")
+    bio.seek(0)
+    return bio
+
