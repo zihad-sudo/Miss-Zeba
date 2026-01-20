@@ -40,8 +40,8 @@ def get_font_menu(settings, user_id, view="main"):
     
     if view == "main":
         markup.add(types.InlineKeyboardButton(f"✅ Current: {curr}", callback_data="ignore"))
-        markup.add(types.InlineKeyboardButton(f"❤️ My Favorites ({len(favs)})", callback_data="wm_font_view_fav"),
-                   types.InlineKeyboardButton("🌐 All Global Fonts", callback_data="wm_font_view_all"))
+        markup.add(types.InlineKeyboardButton(f"❤️ My Favorites ({len(favs)})", callback_data="wm_font_list_fav"),
+                   types.InlineKeyboardButton("🌐 All Global Fonts", callback_data="wm_font_list_all"))
         markup.add(types.InlineKeyboardButton("wd System Default", callback_data="wm_font_set_default"))
         markup.add(types.InlineKeyboardButton("➕ Upload New Font", callback_data="wm_font_upload"))
         markup.add(types.InlineKeyboardButton("🔙 Back to Studio", callback_data="wm_menu_main"))
@@ -68,7 +68,7 @@ def get_font_menu(settings, user_id, view="main"):
             markup.row(*row)
 
     if view == "favorites": markup.add(types.InlineKeyboardButton("🌐 Browse All Fonts", callback_data="wm_font_view_all"))
-    else: markup.add(types.InlineKeyboardButton("❤️ Go to Favorites", callback_data="wm_font_view_fav"))
+    else: markup.add(types.InlineKeyboardButton("❤️ Go to Favorites", callback_data="wm_font_list_fav"))
     markup.add(types.InlineKeyboardButton("🔙 Back", callback_data="wm_menu_fonts"))
     return markup
 
