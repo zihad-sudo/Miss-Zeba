@@ -1,11 +1,21 @@
+# handlers/tools/watermark/core.py
+
 import os
 import traceback
 from telebot import types
 import uuid 
 from io import BytesIO
+
+# --- IMPORTS FROM LOCAL FILES ---
 from .data import get_wm_settings, save_wm_settings
 from .engine import apply_watermark_image, apply_watermark_video, generate_font_preview_image
 from .menus import *
+
+# 🔥 CRITICAL IMPORT: অন্য টুলের স্টেট চেক করার জন্য
+try:
+    from handlers.tools.url_shorten.core import user_state_url
+except ImportError:
+    user_state_url = {}
 
 # 🛡️ Safe Import for Admin Check
 try:
@@ -13,13 +23,16 @@ try:
 except ImportError:
     def is_admin(uid): return False
 
+# -------------------------------
+# CONFIGURATION
+# -------------------------------
 FONTS_DIR = "data/fonts"
 MAX_FONT_SIZE = 3 * 1024 * 1024
 MAX_MEDIA_SIZE = 20 * 1024 * 1024
 
 if not os.path.exists(FONTS_DIR): os.makedirs(FONTS_DIR)
 
-user_states = {}
+user_states_watermark = {}
 last_menu_ids = {}
 
 def update_wm(cid, k, v): save_wm_settings(cid, k, v)
@@ -31,11 +44,8 @@ def send_menu(bot, cid, txt, mk, mid=None):
             bot.edit_message_text(txt, cid, mid, reply_markup=mk, parse_mode="Markdown")
             last_menu_ids[cid] = mid
             return
-        except Exception:
-            # যদি মেসেজ একই থাকে তবে টেলিগ্রাম এরর দেয়, আমরা সেটা ইগনোর করবো
-            pass
+        except: pass
             
-    # যদি আগের মেনু ডিলিট করে নতুন পাঠাতে চাই
     if cid in last_menu_ids:
         try: bot.delete_message(cid, last_menu_ids[cid])
         except: pass
@@ -48,7 +58,7 @@ def send_menu(bot, cid, txt, mk, mid=None):
 
 def refresh_main_menu(bot, cid, mid=None):
     s = get_wm_settings(cid)
-    txt = f"🎛️ **Watermark Studio**\n📝 Text: `{s.get('text','Watermark')}`\n🎨 Font: `{s.get('font_name','Default')}`\n👇 **Send Photo, Video or GIF to process.**"
+    txt = f"🎛️ **Watermark Studio**\n📝 Text: `{s.get('text','Watermark')}`\n🎨 Font: `{s.get('font_name','Default')}`\n\n👇 **Send Photo, Video or GIF to process.**"
     send_menu(bot, cid, txt, get_main_menu(s), mid)
 
 # --- PROCESS MEDIA (Main Logic) ---
@@ -64,14 +74,13 @@ def process_media(bot, m, file_type):
         file_info = bot.get_file(file_id)
         if file_info.file_size > MAX_MEDIA_SIZE:
             bot.delete_message(cid, msg.message_id)
-            bot.reply_to(m, f"⚠️ File too big! Max size: {MAX_MEDIA_SIZE/(1024*1024):.0f}MB")
-            return
+            return bot.reply_to(m, f"⚠️ File too big! Max size: 20MB")
 
         downloaded = bot.download_file(file_info.file_path)
         ext_in = ".mp4" if file_type == 'video' else (".gif" if file_type == 'gif' else ".jpg")
         
-        t_in = f"ui_in_{cid}{ext_in}"
-        t_out = f"ui_out_{cid}{ext_in}"
+        t_in = f"wm_in_{cid}{ext_in}"
+        t_out = f"wm_out_{cid}{ext_in}"
         
         with open(t_in, 'wb') as f: f.write(downloaded)
         
@@ -99,285 +108,152 @@ def process_media(bot, m, file_type):
         bot.edit_message_text(f"❌ Error: {e}", cid, msg.message_id)
         if os.path.exists(t_in): os.remove(t_in)
 
-
 # =========================================================
 # 🎮 MAIN HANDLERS
 # =========================================================
 
 def register_watermark_handlers(bot):
 
-    # -------------------------------------------------
-    # HELPER: AUTO STOP LOADING SPINNER
-    # -------------------------------------------------
     def safe_handle(call, func):
         try:
-            bot.answer_callback_query(call.id) # 🛑 KEY FIX: STOPS LOADING
+            bot.answer_callback_query(call.id)
             func()
         except Exception as e:
-            print(f"❌ Callback Error ({call.data}): {e}")
             traceback.print_exc()
 
-    @bot.callback_query_handler(func=lambda c: c.data == "tool_img")
-    def open_studio(c):
-        def action():
-            user_states[c.message.chat.id] = "waiting_media"
-            refresh_main_menu(bot, c.message.chat.id, c.message.message_id)
-        safe_handle(c, action)
+    # --- ১. ইনপুট ফিল্টার ফাংশন ---
+    def wm_input_filter(m):
+        cid = m.chat.id
+        # যদি URL টুল কোনো কিছুর জন্য অপেক্ষা করে, তবে ওয়াটারমার্ক টুল এটি ধরবে না
+        if user_state_url.get(cid, {}).get('action') is not None:
+            return False
+        return True
 
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_menu_main")
-    def back_main(c): 
-        safe_handle(c, lambda: refresh_main_menu(bot, c.message.chat.id, c.message.message_id))
-
-    # --- FONTS ---
-        # core.py এর register_watermark_handlers এর ভেতর এটি রিপ্লেস করুন
-
-    # core.py এর register_watermark_handlers এর ভেতর এই দুটি হ্যান্ডলার আপডেট করুন
-
-    # ১. ফন্ট ম্যানেজারে ঢোকার হ্যান্ডলার (এখন আর ইমেজ দেখাবে না)
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_menu_fonts")
-    def m_fonts(c):
-        def action():
-            cid, mid = c.message.chat.id, c.message.message_id
-            settings = get_wm_settings(cid)
-            markup = get_font_menu(settings, c.from_user.id, "main")
-            
-            # এখানে শুধু টেক্সট মেনু পাঠানো হবে
-            txt = "🔠 **Font Manager**\n\nফন্ট প্রিভিউ দেখতে 'All Global Fonts' অথবা 'Favorites' এ ক্লিক করুন।"
-            send_menu(bot, cid, txt, markup, mid)
-        safe_handle(c, action)
-
-    # ২. অল এবং ফেভারিট লিস্টের হ্যান্ডলার (এখানে ইমেজ দেখাবে)
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_font_list_"))
-    def v_fonts(c):
-        def action():
-            cid, mid = c.message.chat.id, c.message.message_id
-            view = c.data.replace("wm_font_list_", "")
-            
-            s = get_wm_settings(cid)
-            bot.answer_callback_query(c.id, "⌛ Loading Previews...")
-            
-            if view == "all":
-                target_fonts = [f for f in os.listdir(FONTS_DIR) if f.endswith(('.ttf', '.otf'))]
-                title = "🌐 **Global Library**"
-            else:
-                target_fonts = s.get('favorites', [])
-                title = "❤️ **Your Favorites**"
-
-            # ইমেজ জেনারেট করা
-            preview_img = generate_font_preview_image(FONTS_DIR, target_fonts)
-            markup = get_font_menu(s, c.from_user.id, view)
-            
-            if preview_img:
-                # যদি আগের মেসেজ টেক্সট থাকে তবে সেটি ডিলিট করে ফটো পাঠাবে
-                try: bot.delete_message(cid, mid)
-                except: pass
-                
-                caption = f"{title}\nনিচে ফন্টগুলোর স্টাইল প্রিভিউ দেওয়া হলো:"
-                sent = bot.send_photo(cid, preview_img, caption=caption, reply_markup=markup, parse_mode="Markdown")
-                last_menu_ids[cid] = sent.message_id
-            else:
-                send_menu(bot, cid, f"{title}\n\n(এই লিস্টে কোনো ফন্ট নেই)", markup, mid)
+    # --- ২. মেইন ইনপুট হ্যান্ডলার (ফটো, ভিডিও, টেক্সট) ---
+    @bot.message_handler(content_types=['text', 'photo', 'video', 'animation', 'document'], func=wm_input_filter)
+    def handle_wm_inputs(m):
+        cid = m.chat.id
+        st = user_states_watermark.get(cid)
         
-        safe_handle(c, action)
+        # টেক্সট ইনপুট (সেটিংস পরিবর্তন)
+        if m.content_type == 'text':
+            if st == "waiting_text":
+                update_wm(cid, "text", m.text)
+                user_states_watermark[cid] = "waiting_media"
+                refresh_main_menu(bot, cid)
+            elif st and st.startswith("waiting_col_"):
+                update_wm(cid, "text_color" if "text" in st else "bg_color", m.text)
+                user_states_watermark[cid] = "waiting_media"
+                refresh_main_menu(bot, cid)
+            return
 
+        # মিডিয়া ইনপুট (ওয়াটারমার্ক প্রয়োগ)
+        if m.photo: process_media(bot, m, 'photo')
+        elif m.video: process_media(bot, m, 'video')
+        elif m.animation: process_media(bot, m, 'gif')
+        elif m.document and m.document.mime_type and 'video' in m.document.mime_type:
+            process_media(bot, m, 'video')
 
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_font_list_"))
-    def v_fonts(c):
+    # --- ৩. কলব্যাক হ্যান্ডলারস (ড্যাশবোর্ড ও সেটিংস) ---
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_") or c.data == "tool_img")
+    def handle_wm_callbacks(c):
+        cid, mid = c.message.chat.id, c.message.message_id
+        data = c.data
+
         def action():
-            cid = c.message.chat.id
-            mid = c.message.message_id
-            view = c.data.replace("wm_font_list_", "") # 'all' অথবা 'fav'
+            if data == "tool_img" or data == "wm_menu_main":
+                user_states_watermark[cid] = "waiting_media"
+                refresh_main_menu(bot, cid, mid if data=="wm_menu_main" else None)
             
-            s = get_wm_settings(cid)
-            bot.answer_callback_query(c.id, "⌛ Updating Preview...")
+            elif data == "wm_menu_fonts":
+                send_menu(bot, cid, "🔠 **Font Manager**", get_font_menu(get_wm_settings(cid), c.from_user.id, "main"), mid)
             
-            # ভিউ অনুযায়ী ফন্ট লিস্ট তৈরি করা
-            if view == "all":
-                target_fonts = [f for f in os.listdir(FONTS_DIR) if f.endswith(('.ttf', '.otf'))]
-                title = "🌐 **Global Library**"
-            else:
-                target_fonts = s.get('favorites', [])
-                title = "❤️ **Your Favorites**"
-
-            # ইমেজ জেনারেট করা
-            preview_img = generate_font_preview_image(FONTS_DIR, target_fonts)
-            markup = get_font_menu(s, c.from_user.id, view)
-            caption = f"{title}\nনিচের ইমেজে আপনার সিলেক্ট করা লিস্টের প্রিভিউ দেখুন।"
-
-            if preview_img:
-                # আগের ফটো মেসেজ ডিলিট করে নতুন ফটো পাঠানো (টেলিগ্রামে ফটো এডিট করা জটিল তাই ডিলিট-সেন্ড ভালো)
-                try: bot.delete_message(cid, mid)
-                except: pass
-                sent = bot.send_photo(cid, preview_img, caption=caption, reply_markup=markup, parse_mode="Markdown")
-                last_menu_ids[cid] = sent.message_id
-            else:
-                send_menu(bot, cid, f"{title}\n(No fonts to show in this list)", markup, mid)
-        
-        safe_handle(c, action)
-        
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_fset_"))
-    def set_font(c):
-        def action():
-            fname = c.data.replace("wm_fset_", "")
-            fpath = os.path.join(FONTS_DIR, fname)
-            if os.path.exists(fpath):
-                update_wm(c.message.chat.id, "font_name", fname)
-                update_wm(c.message.chat.id, "font_path", fpath)
-                update_wm(c.message.chat.id, "font_custom", True)
-                
-                # Show main font menu again
-                send_menu(bot, c.message.chat.id, "🔠 **Font Manager**", get_font_menu(get_wm_settings(c.message.chat.id), c.from_user.id, "main"), c.message.message_id)
-            else:
-                bot.answer_callback_query(c.id, "⚠️ Missing File", show_alert=True)
-        safe_handle(c, action)
-
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_ffav_"))
-    def tog_fav(c):
-        def action():
-            fname = c.data.replace("wm_ffav_", "")
-            s = get_wm_settings(c.message.chat.id); favs = s.get('favorites', [])
-            if fname in favs: favs.remove(fname); msg="💔 Removed"
-            else: favs.append(fname); msg="❤️ Added"
-            update_wm(c.message.chat.id, "favorites", favs)
-            
-            # Show update alert but keep loading stopped
-            bot.answer_callback_query(c.id, msg) 
-            send_menu(bot, c.message.chat.id, "🌐 **Global Library**", get_font_menu(s, c.from_user.id, "all"), c.message.message_id)
-        # Exceptionally manually handled inside action for custom alerts, but wrapping safely
-        try: action() 
-        except: pass
-
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_fdel_"))
-    def del_font(c):
-        def action():
-            if not is_admin(c.from_user.id): 
-                bot.answer_callback_query(c.id, "⛔ Admins Only", show_alert=True)
-                return
-            fname = c.data.replace("wm_fdel_", "")
-            try:
-                os.remove(os.path.join(FONTS_DIR, fname))
-                bot.answer_callback_query(c.id, "🗑️ Deleted")
-                send_menu(bot, c.message.chat.id, "🌐 **Global Library**", get_font_menu(get_wm_settings(c.message.chat.id), c.from_user.id, "all"), c.message.message_id)
-            except: pass
-        safe_handle(c, action)
-
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_font_upload")
-    def ask_f_up(c):
-        def action():
-            user_states[c.message.chat.id] = "waiting_font"
-            # Delete old menu to avoid clutter
-            if c.message.chat.id in last_menu_ids:
-                try: bot.delete_message(c.message.chat.id, last_menu_ids[c.message.chat.id])
-                except: pass
-            msg = bot.send_message(c.message.chat.id, "📤 **Send .ttf/.otf file (Max 3MB):**")
-            last_menu_ids[c.message.chat.id] = msg.message_id
-        safe_handle(c, action)
-    
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_font_set_default")
-    def def_font(c):
-        def action():
-            update_wm(c.message.chat.id, "font_custom", False)
-            update_wm(c.message.chat.id, "font_name", "Default")
-            send_menu(bot, c.message.chat.id, "🔠 **Font Manager**", get_font_menu(get_wm_settings(c.message.chat.id), c.from_user.id, "main"), c.message.message_id)
-        safe_handle(c, action)
-
-    # --- PREVIEW ---
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_do_preview")
-    def do_prev(c):
-        # Preview takes time, so we explicitly answer first inside safe_handle
-        def action():
-            try:
-                from PIL import Image
-                t_in, t_out = f"p_in_{c.message.chat.id}.jpg", f"p_out_{c.message.chat.id}.jpg"
-                Image.new('RGB', (1280, 720), (200, 200, 200)).save(t_in)
-                apply_watermark_image(t_in, t_out, get_wm_settings(c.message.chat.id))
-                with open(t_out, 'rb') as f: bot.send_photo(c.message.chat.id, f, caption="👁️ Image Preview")
-                os.remove(t_in); os.remove(t_out)
-                refresh_main_menu(bot, c.message.chat.id) # Show menu again
-            except Exception as e:
-                bot.send_message(c.message.chat.id, f"Preview Error: {e}")
-        safe_handle(c, action)
-
-    # --- OTHER TOGGLES ---
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_toggle_mode")
-    def tog_m(c): 
-        safe_handle(c, lambda: (update_wm(c.message.chat.id, "mode", 'logo' if get_wm_settings(c.message.chat.id).get('mode')=='text' else 'text'), refresh_main_menu(bot, c.message.chat.id, c.message.message_id)))
-
-    # COLORS, STYLES, INPUTS - All wrapped with safe_handle logic implicitly
-    # (To keep code short, I'll apply the pattern to the remaining groups)
-
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_menu_col_target")
-    def m_col_t(c): safe_handle(c, lambda: send_menu(bot, c.message.chat.id, "🎨 **Select Target:**", get_color_target_menu(), c.message.message_id))
-    
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_col_menu_"))
-    def m_col_p(c): safe_handle(c, lambda: send_menu(bot, c.message.chat.id, "🎨 **Pick Color:**", get_color_palette_menu(c.data.split("_")[-1]), c.message.message_id))
-
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("wm_setcol_"))
-    def set_col(c):
-        def action():
-            p = c.data.split("_"); t, v = p[2], p[3]
-            if v == "cust": 
-                user_states[c.message.chat.id] = f"waiting_col_{t}"
-                if c.message.chat.id in last_menu_ids:
-                    try: bot.delete_message(c.message.chat.id, last_menu_ids[c.message.chat.id])
+            elif data.startswith("wm_font_list_"):
+                view = data.replace("wm_font_list_", "")
+                s = get_wm_settings(cid)
+                bot.answer_callback_query(c.id, "⌛ Loading Previews...")
+                target_fonts = [f for f in os.listdir(FONTS_DIR) if f.endswith(('.ttf', '.otf'))] if view=="all" else s.get('favorites', [])
+                preview_img = generate_font_preview_image(FONTS_DIR, target_fonts)
+                markup = get_font_menu(s, c.from_user.id, view)
+                if preview_img:
+                    try: bot.delete_message(cid, mid)
                     except: pass
-                msg = bot.send_message(c.message.chat.id, f"🎨 **Send Hex for {t}:**")
-                last_menu_ids[c.message.chat.id] = msg.message_id
-            else: 
-                update_wm(c.message.chat.id, "text_color" if t=="text" else "bg_color", v)
-                refresh_main_menu(bot, c.message.chat.id, c.message.message_id)
+                    sent = bot.send_photo(cid, preview_img, caption=f"🌐 **Library Preview**", reply_markup=markup)
+                    last_menu_ids[cid] = sent.message_id
+                else: send_menu(bot, cid, "📂 No fonts found.", markup, mid)
+
+            elif data.startswith("wm_fset_"):
+                fname = data.replace("wm_fset_", "")
+                update_wm(cid, "font_name", fname)
+                update_wm(cid, "font_path", os.path.join(FONTS_DIR, fname))
+                update_wm(cid, "font_custom", True)
+                send_menu(bot, cid, "🔠 **Font Manager**", get_font_menu(get_wm_settings(cid), c.from_user.id, "main"), mid)
+
+            elif data == "wm_font_upload":
+                user_states_watermark[cid] = "waiting_font"
+                bot.send_message(cid, "📤 **Send .ttf/.otf file (Max 3MB):**")
+
+            elif data == "wm_do_preview":
+                from PIL import Image
+                t_in, t_out = f"p_in_{cid}.jpg", f"p_out_{cid}.jpg"
+                Image.new('RGB', (1280, 720), (200, 200, 200)).save(t_in)
+                apply_watermark_image(t_in, t_out, get_wm_settings(cid))
+                with open(t_out, 'rb') as f: bot.send_photo(cid, f, caption="👁️ Preview")
+                os.remove(t_in); os.remove(t_out)
+                refresh_main_menu(bot, cid)
+
+            elif data == "wm_toggle_mode":
+                curr = get_wm_settings(cid).get('mode', 'text')
+                update_wm(cid, "mode", "logo" if curr=="text" else "text")
+                refresh_main_menu(bot, cid, mid)
+
+            elif data == "wm_menu_col_target":
+                send_menu(bot, cid, "🎨 **Select Target:**", get_color_target_menu(), mid)
+
+            elif data.startswith("wm_col_menu_"):
+                target = data.split("_")[-1]
+                send_menu(bot, cid, f"🎨 **Pick {target.title()} Color:**", get_color_palette_menu(target), mid)
+
+            elif data.startswith("wm_setcol_"):
+                p = data.split("_"); t, v = p[2], p[3]
+                if v == "cust":
+                    user_states_watermark[cid] = f"waiting_col_{t}"
+                    bot.send_message(cid, f"🎨 **Send Hex for {t}:**")
+                else:
+                    update_wm(cid, "text_color" if t=="text" else "bg_color", v)
+                    refresh_main_menu(bot, cid, mid)
+
+            elif data == "wm_set_text":
+                user_states_watermark[cid] = "waiting_text"
+                bot.send_message(cid, "✍️ **Send Watermark Text:**")
+
+            elif data == "wm_tog_bg":
+                curr = get_wm_settings(cid).get('bg_enabled', True)
+                update_wm(cid, "bg_enabled", not curr)
+                refresh_main_menu(bot, cid, mid)
+
+            elif data == "wm_menu_style":
+                send_menu(bot, cid, "✨ **Style & Rotation**", get_style_menu(), mid)
+
+            elif data == "wm_menu_tile":
+                send_menu(bot, cid, "💠 **Layout / Position**", get_tile_menu(get_wm_settings(cid)), mid)
+
         safe_handle(c, action)
 
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_set_text")
-    def ask_t(c):
-        def action():
-            user_states[c.message.chat.id] = "waiting_text"
-            if c.message.chat.id in last_menu_ids:
-                 try: bot.delete_message(c.message.chat.id, last_menu_ids[c.message.chat.id])
-                 except: pass
-            msg=bot.send_message(c.message.chat.id, "✍️ **Send Text:**")
-            last_menu_ids[c.message.chat.id]=msg.message_id
-        safe_handle(c, action)
-
-    # Style, Tile, Logo handlers follow same pattern
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_menu_style")
-    def m_style(c): safe_handle(c, lambda: send_menu(bot, c.message.chat.id, "✨ **Style**", get_style_menu(), c.message.message_id))
-    
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_menu_tile")
-    def m_tile(c): safe_handle(c, lambda: send_menu(bot, c.message.chat.id, "💠 **Layout**", get_tile_menu(get_wm_settings(c.message.chat.id)), c.message.message_id))
-
-    @bot.callback_query_handler(func=lambda c: c.data == "wm_tog_bg")
-    def tog_bg(c):
-         safe_handle(c, lambda: (update_wm(c.message.chat.id, "bg_enabled", not get_wm_settings(c.message.chat.id).get('bg_enabled')), refresh_main_menu(bot, c.message.chat.id, c.message.message_id)))
-
-    # ... (Any missing minor button handlers should just follow this safe_handle pattern) ...
-
-    # --- INPUT LISTENERS (No change needed here, these are messages not callbacks) ---
-    @bot.message_handler(content_types=['document'], func=lambda m: user_states.get(m.chat.id) == "waiting_font")
-    def up_font(m):
-        if not m.document.file_name.lower().endswith(('.ttf','.otf')): return bot.reply_to(m, "⚠️ Need .ttf/.otf")
-        if m.document.file_size > MAX_FONT_SIZE: return bot.reply_to(m, "⚠️ Max 3MB")
-        path = os.path.join(FONTS_DIR, m.document.file_name)
-        if os.path.exists(path): return bot.reply_to(m, "⛔ Name taken!")
+    # --- ৪. ফন্ট ফাইল আপলোড হ্যান্ডলার (Document) ---
+    @bot.message_handler(content_types=['document'], func=lambda m: user_states_watermark.get(m.chat.id) == "waiting_font")
+    def handle_font_upload(m):
+        if not m.document.file_name.lower().endswith(('.ttf', '.otf')):
+            return bot.reply_to(m, "⚠️ Please send a .ttf or .otf file.")
         try:
-            with open(path, 'wb') as f: f.write(bot.download_file(bot.get_file(m.document.file_id).file_path))
-            update_wm(m.chat.id, "font_name", m.document.file_name); update_wm(m.chat.id, "font_path", path); update_wm(m.chat.id, "font_custom", True)
-            favs = get_wm_settings(m.chat.id).get('favorites', [])
-            if m.document.file_name not in favs: favs.append(m.document.file_name); update_wm(m.chat.id, "favorites", favs)
-            bot.reply_to(m, f"✅ Uploaded: {m.document.file_name}"); user_states[m.chat.id]="waiting_media"; refresh_main_menu(bot, m.chat.id)
-        except Exception as e: bot.reply_to(m, f"Error: {e}")
-
-    @bot.message_handler(content_types=['text', 'photo', 'video', 'animation', 'document'], func=lambda m: m.chat.type=='private')
-    def handle_inp(m):
-        st = user_states.get(m.chat.id)
-        
-        # Text Inputs
-        if st == "waiting_text" and m.text: update_wm(m.chat.id, "text", m.text); user_states[m.chat.id]="waiting_media"; refresh_main_menu(bot, m.chat.id)
-        elif st and st.startswith("waiting_col_") and m.text: update_wm(m.chat.id, "text_color" if "text" in st else "bg_color", m.text); user_states[m.chat.id]="waiting_media"; refresh_main_menu(bot, m.chat.id)
-        
-        # Media Inputs
-        elif st == "waiting_media" or st is None:
-            if m.photo: process_media(bot, m, 'photo')
-            elif m.video: process_media(bot, m, 'video')
-            elif m.animation: process_media(bot, m, 'gif')
-            elif m.document and m.document.mime_type and m.document.mime_type.startswith('video'): process_media(bot, m, 'video')
+            path = os.path.join(FONTS_DIR, m.document.file_name)
+            with open(path, 'wb') as f:
+                f.write(bot.download_file(bot.get_file(m.document.file_id).file_path))
+            update_wm(m.chat.id, "font_name", m.document.file_name)
+            update_wm(m.chat.id, "font_path", path)
+            update_wm(m.chat.id, "font_custom", True)
+            bot.reply_to(m, f"✅ Font '{m.document.file_name}' uploaded successfully!")
+            user_states_watermark[m.chat.id] = "waiting_media"
+            refresh_main_menu(bot, m.chat.id)
+        except Exception as e:
+            bot.reply_to(m, f"❌ Upload failed: {e}")
