@@ -1,20 +1,28 @@
+# Main.py
+
 import telebot
 import time
 import threading
 import os
 from config import BOT_TOKEN
 
-# --- 1. CORE HANDLERS ---
+# =========================================================
+# 📥 ১. CORE HANDLERS IMPORT
+# =========================================================
 from handlers.start import register_start
 from handlers.auth import register_auth_handlers
 from handlers.admin_panel import register_admin_handlers
 
-# --- 2. TOOLS HANDLERS (New Updates) ---
-from handlers.tools.url_shorten import register_url_handlers      # ✅ URL Shortener
-from handlers.tools.watermark import register_watermark_handlers  # ✅ Watermark
+# =========================================================
+# 🔥 ২. TOOLS HANDLERS (New Filtered Updates)
+# =========================================================
+from handlers.tools.url_shorten.core import register_url_handlers      # ✅ URL Shortener
+from handlers.tools.watermark.core import register_watermark_handlers  # ✅ Watermark
 from handlers.tools.group_management import register_commands as register_group_tools 
 
-# --- 3. SHOP & OTHERS HANDLERS (Legacy) ---
+# =========================================================
+# 🛍️ ৩. SHOP & OTHERS HANDLERS (Legacy)
+# =========================================================
 from handlers.broadcast import register_broadcast_handlers
 from handlers.shop_seller import register_seller_handlers
 from handlers.shop_buyer import register_buyer_handlers
@@ -30,40 +38,34 @@ from handlers.callbacks import register_callbacks
 # --- UTILS ---
 from utils.utils_shop import get_and_clear_due_posts
 
-# টোকেন চেক
+# ---------------------------------------------------------
+# 🛡️ BOT INITIALIZATION
+# ---------------------------------------------------------
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is missing in config.py")
 
-# বট ইনিশিলাইজেশন
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
 # =========================================================
-# 📥 REGISTER HANDLERS (Order is Very Important!)
+# 📥 REGISTER HANDLERS (The Strategic Order)
 # =========================================================
 print("📥 Registering handlers...")
 
-# ১. বেসিক কমান্ড (Start/Admin)
+# ১. বেসিক কমান্ড (Start/Admin) - এগুলো সবার আগে থাকবে
 register_start(bot)
 register_auth_handlers(bot)
 register_admin_handlers(bot)
 
-# ---------------------------------------------------------
-# 🔥 CRITICAL SECTION: TOOLS ORDER
-# ---------------------------------------------------------
-
-# ২. URL Shortener (সবার আগে)
-# কারণ: এটি স্পেসিফিক লিংক চেক করে। এটি নিচে থাকলে Watermark টুল লিংকটিকে সাধারণ টেক্সট মনে করে খেয়ে ফেলবে।
+# ২. URL Shortener
+# যেহেতু এটি Regex ফিল্টার ব্যবহার করে, একে আগে রাখা নিরাপদ।
 register_url_handlers(bot)
 
-# ৩. Group Management
-# গ্রুপ টুলস এবং কমান্ড হ্যান্ডল করার জন্য
-register_group_tools(bot)
-
-# ৪. Watermark Tool
-# কারণ: এটি মিডিয়া এবং বাকি সাধারণ টেক্সট হ্যান্ডল করে।
+# ৩. Watermark Tool
+# এটি এখন URL টুলের স্টেট চেক করে কাজ করে, তাই সংঘর্ষ হবে না।
 register_watermark_handlers(bot)
 
-# ---------------------------------------------------------
+# ৪. Group Management
+register_group_tools(bot)
 
 # ৫. শপ এবং অন্যান্য ফিচার (Shop Handlers)
 register_broadcast_handlers(bot)
@@ -77,10 +79,10 @@ register_order_handlers(bot)
 register_analytics_handlers(bot)
 register_cart_handlers(bot)
 
-# ৬. গ্লোবাল কলব্যাক (সবার শেষে)
+# ৬. গ্লোবাল কলব্যাক (সবার শেষে Catch-all হিসেবে)
 register_callbacks(bot)
 
-print("✅ All handlers registered successfully.")
+print("✅ All handlers registered successfully with Collision Fix.")
 
 # =========================================================
 # ⏰ SCHEDULER (Background Task)
@@ -118,7 +120,11 @@ if __name__ == "__main__":
     if not os.path.exists("data/fonts"): os.makedirs("data/fonts")
     
     print("🤖 Bot is running...")
-    try:
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
-    except Exception as e:
-        print(f"❌ Critical Error: {e}")
+    
+    # এরর হ্যান্ডলিং সহ বট পোলিং
+    while True:
+        try:
+            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"❌ Critical Polling Error: {e}")
+            time.sleep(15) # ১৫ সেকেন্ড অপেক্ষা করে আবার চেষ্টা করবে
