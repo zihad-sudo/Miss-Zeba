@@ -1,73 +1,125 @@
-# Main.py
-
 import telebot
 import time
 import threading
 import os
-from config import BOT_TOKEN
+import json
+import sys
 
 # =========================================================
-# 📥 ১. CORE HANDLERS IMPORT
+# ⚙️ 1. CONFIGURATION LOAD
 # =========================================================
-from handlers.start import register_start
-from handlers.auth import register_auth_handlers
-from handlers.admin_panel import register_admin_handlers
+try:
+    # config থেকে সব পাথ এবং টোকেন ইমপোর্ট করা হচ্ছে
+    from config import BOT_TOKEN, DATA_DIR, USERS_FILE, SHOPS_FILE, CUSTOM_FILE
+except ImportError:
+    print("❌ Critical Error: config.py not found!")
+    print("Please create secrets.py and config.py first.")
+    sys.exit(1)
 
-# =========================================================
-# 🔥 ২. TOOLS HANDLERS (New Filtered Updates)
-# =========================================================
-from handlers.tools.url_shorten.core import register_url_handlers      # ✅ URL Shortener
-from handlers.tools.watermark.core import register_watermark_handlers  # ✅ Watermark
-from handlers.tools.group_management import register_commands as register_group_tools 
-
-# =========================================================
-# 🛍️ ৩. SHOP & OTHERS HANDLERS (Legacy)
-# =========================================================
-from handlers.broadcast import register_broadcast_handlers
-from handlers.shop_seller import register_seller_handlers
-from handlers.shop_buyer import register_buyer_handlers
-from handlers.shop_categories import register_category_handlers
-from handlers.shop_requests import register_request_handlers 
-from handlers.shop_social import register_social_handlers, post_product_to_channel
-from handlers.shop_coupons import register_coupon_handlers
-from handlers.shop_orders import register_order_handlers
-from handlers.shop_analytics import register_analytics_handlers
-from handlers.shop_cart import register_cart_handlers 
-from handlers.callbacks import register_callbacks
-
-# --- UTILS ---
-from utils.utils_shop import get_and_clear_due_posts
-
-# ---------------------------------------------------------
-# 🛡️ BOT INITIALIZATION
-# ---------------------------------------------------------
+# টোকেন চেক
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is missing in config.py")
+    raise RuntimeError("⚠️ BOT_TOKEN is missing in secrets.py/config.py")
 
+# বট ইনিশিলাইজেশন
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
 # =========================================================
-# 📥 REGISTER HANDLERS (The Strategic Order)
+# 🛠 2. SYSTEM CHECK & AUTO-FIX (Startup Logic)
 # =========================================================
-print("📥 Registering handlers...")
+def check_and_create_files():
+    """বট রান করার আগে সব ফোল্ডার এবং জেসন ফাইল চেক করে তৈরি করে"""
+    print("🔍 Checking system files...")
 
-# ১. বেসিক কমান্ড (Start/Admin) - এগুলো সবার আগে থাকবে
+    # ১. ডাটা ফোল্ডার চেক
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+        print(f"✅ Created folder: {DATA_DIR}")
+    
+    # ফন্টস ফোল্ডার (Watermark এর জন্য)
+    fonts_dir = os.path.join(DATA_DIR, "fonts")
+    if not os.path.exists(fonts_dir):
+        os.makedirs(fonts_dir)
+
+    # ২. ইউজার ডাটাবেস (Users DB)
+    if not os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'w') as f: json.dump({}, f)
+        print("✅ Created users.json")
+
+    # ৩. শপ ডাটাবেস (Shops DB)
+    if not os.path.exists(SHOPS_FILE):
+        with open(SHOPS_FILE, 'w') as f: json.dump({}, f)
+        print("✅ Created shops.json")
+
+    # ৪. কাস্টম ডাটা / সেটিংস (Settings DB)
+    if not os.path.exists(CUSTOM_FILE):
+        default_settings = {
+            "texts": {
+                "welcome": "Welcome to the group!",
+                "rules": "Respect admins."
+            },
+            "banwords": [],
+            "warns": {},
+            "admin_menu_structure": {
+                "main_menu": [["🔘 Edit Tools Button", "main_btn_tools"]]
+            }
+        }
+        with open(CUSTOM_FILE, 'w') as f: json.dump(default_settings, f)
+        print("✅ Created custom_data.json")
+
+# =========================================================
+# 📥 3. HANDLERS IMPORT
+# =========================================================
+print("📥 Loading handlers...")
+
+try:
+    # --- CORE ---
+    from handlers.start import register_start
+    from handlers.auth import register_auth_handlers
+    from handlers.admin_panel import register_admin_handlers
+
+    # --- TOOLS ---
+    from handlers.tools.url_shorten.core import register_url_handlers
+    from handlers.tools.watermark.core import register_watermark_handlers
+    from handlers.tools.group_management.commands import register_commands as register_group_tools 
+
+    # --- SHOP & OTHERS ---
+    from handlers.broadcast import register_broadcast_handlers
+    from handlers.shop_seller import register_seller_handlers
+    from handlers.shop_buyer import register_buyer_handlers
+    from handlers.shop_categories import register_category_handlers
+    from handlers.shop_requests import register_request_handlers 
+    from handlers.shop_social import register_social_handlers, post_product_to_channel
+    from handlers.shop_coupons import register_coupon_handlers
+    from handlers.shop_orders import register_order_handlers
+    from handlers.shop_analytics import register_analytics_handlers
+    from handlers.shop_cart import register_cart_handlers 
+    from handlers.callbacks import register_callbacks
+    
+    # --- UTILS ---
+    from utils.utils_shop import get_and_clear_due_posts
+
+except ImportError as e:
+    print(f"\n❌ Import Error: {e}")
+    print("Make sure all handler files exist and __init__.py is handled correctly.\n")
+    # আমরা এখানে exit করছি না, যাতে লগ দেখে ফিক্স করা যায়, তবে হ্যান্ডলার মিসিং থাকলে বট ঠিকমতো কাজ করবে না
+    time.sleep(5) 
+
+# =========================================================
+# 📝 4. REGISTER HANDLERS (Execution Order)
+# =========================================================
+print("🔗 Registering handlers...")
+
+# ১. বেসিক কমান্ড (Start/Admin)
 register_start(bot)
 register_auth_handlers(bot)
 register_admin_handlers(bot)
 
-# ২. URL Shortener
-# যেহেতু এটি Regex ফিল্টার ব্যবহার করে, একে আগে রাখা নিরাপদ।
-register_url_handlers(bot)
+# ২. টুলস (Tools)
+register_url_handlers(bot)       # Regex Filter
+register_watermark_handlers(bot) # State Filter
+register_group_tools(bot)        # Group Commands
 
-# ৩. Watermark Tool
-# এটি এখন URL টুলের স্টেট চেক করে কাজ করে, তাই সংঘর্ষ হবে না।
-register_watermark_handlers(bot)
-
-# ৪. Group Management
-register_group_tools(bot)
-
-# ৫. শপ এবং অন্যান্য ফিচার (Shop Handlers)
+# ৩. শপ এবং বিজনেস (Shop Handlers)
 register_broadcast_handlers(bot)
 register_seller_handlers(bot)
 register_buyer_handlers(bot)
@@ -79,13 +131,13 @@ register_order_handlers(bot)
 register_analytics_handlers(bot)
 register_cart_handlers(bot)
 
-# ৬. গ্লোবাল কলব্যাক (সবার শেষে Catch-all হিসেবে)
+# ৪. গ্লোবাল কলব্যাক (Must be last)
 register_callbacks(bot)
 
-print("✅ All handlers registered successfully with Collision Fix.")
+print("✅ All handlers registered successfully.")
 
 # =========================================================
-# ⏰ SCHEDULER (Background Task)
+# ⏰ 5. SCHEDULER (Background Task)
 # =========================================================
 def scheduler_loop():
     print("⏰ Scheduler started...")
@@ -112,19 +164,20 @@ def scheduler_loop():
 threading.Thread(target=scheduler_loop, daemon=True).start()
 
 # =========================================================
-# 🚀 START BOT
+# 🚀 6. MAIN LOOP (Start Bot)
 # =========================================================
 if __name__ == "__main__":
-    # প্রয়োজনীয় ফোল্ডার তৈরি আছে কিনা চেক
-    if not os.path.exists("data"): os.makedirs("data")
-    if not os.path.exists("data/fonts"): os.makedirs("data/fonts")
+    # ১. ফাইল চেক করা
+    check_and_create_files()
     
-    print("🤖 Bot is running...")
+    print("\n🤖 Bot is running...")
+    print("ℹ️  Press Ctrl+C to stop.\n")
     
-    # এরর হ্যান্ডলিং সহ বট পোলিং
+    # ২. ইনফিনিটি পোলিং (নেটওয়ার্ক এরর হ্যান্ডেল করার জন্য)
     while True:
         try:
             bot.infinity_polling(timeout=60, long_polling_timeout=60)
         except Exception as e:
             print(f"❌ Critical Polling Error: {e}")
-            time.sleep(15) # ১৫ সেকেন্ড অপেক্ষা করে আবার চেষ্টা করবে
+            print("🔄 Restarting in 5 seconds...")
+            time.sleep(5)
