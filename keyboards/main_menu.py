@@ -1,47 +1,69 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from utils.utils import is_admin
 
-# Utils ইম্পোর্ট করার চেষ্টা, না পেলে ডিফল্ট ভ্যালু
+# ✅ প্লাগিন হেল্পার (যাতে নতুন টুলসগুলো টুলস মেনুতে দেখা যায়)
 try:
-    from utils.utils import get_text, is_admin
+    from handlers.plugin_manager import get_dynamic_tools
 except ImportError:
-    # যদি utils না থাকে তবে এই ফাংশনগুলো কাজ করবে
-    def is_admin(user_id): return False
-    def get_text(text): return text
+    def get_dynamic_tools(): return []
 
-# -------------------------------
-# Main Menu
-# -------------------------------
+# =================================================
+# 🏠 MAIN MENU (Original Fixed Layout)
+# =================================================
 def main_menu(user_id):
+    """
+    এটি ডাটাবেস থেকে মেনু লোড করবে না।
+    সরাসরি ফিক্সড বাটন দেখাবে যাতে লেআউট নষ্ট না হয়।
+    """
     kb = InlineKeyboardMarkup(row_width=2)
-    kb.row(
-        InlineKeyboardButton("🛠 Tools", callback_data="tools"),
-        InlineKeyboardButton("🛒 Marketplace", callback_data="shop")
-    )
-    kb.add(InlineKeyboardButton("💼 My Business", callback_data="my_business"))
     
-    # Admin চেক
+    # --- Row 1: Tools & Shop ---
+    btn_tools = InlineKeyboardButton("🛠 Tools", callback_data="tools")
+    btn_shop = InlineKeyboardButton("🛒 Marketplace", callback_data="shop")
+    kb.add(btn_tools, btn_shop)
+    
+    # --- Row 2: Business ---
+    btn_biz = InlineKeyboardButton("💼 My Business", callback_data="my_business")
+    kb.add(btn_biz)
+    
+    # --- Row 3: Admin (Only for Admins) ---
     if is_admin(user_id):
-        kb.add(InlineKeyboardButton("👮 Admin", callback_data="admin"))
-    
-    kb.add(InlineKeyboardButton("📢 Manager", callback_data="manager"))
+        btn_admin = InlineKeyboardButton("👮 Admin Panel", callback_data="main_btn_admin")
+        kb.add(btn_admin)
+
     return kb
 
-# -------------------------------
-# Tools menu (Updated)
-# -------------------------------
+# =================================================
+# 🛠 TOOLS MENU (With Plugin Support)
+# =================================================
 def tools_layout():
-    kb = InlineKeyboardMarkup()
-    kb.row(
-        InlineKeyboardButton("🔥 Auto Save", url="https://t.me/MissZeba_Auto_Save_Bot"),
-        InlineKeyboardButton("🔗 URL Shortener", callback_data="tool_url_shortener")
-    )
-    kb.row(
-        InlineKeyboardButton("🛡️ Group Manage", callback_data="open_management"),
-        InlineKeyboardButton("🎨 Watermark Studio", callback_data="tool_img")
-    )
-    kb.add(InlineKeyboardButton("🌤 Weather", callback_data="tool_weather"))
+    kb = InlineKeyboardMarkup(row_width=2)
     
-    # মেইন মেনু রিটার্ন বাটন
+    # --- 1. Built-in Tools (আপনার আগের ফিক্সড টুলস) ---
+    # Row 1
+    kb.add(
+        InlineKeyboardButton("🔗 URL Shortener", callback_data="tool_url_shortener"),
+        InlineKeyboardButton("🎨 Watermark", callback_data="tool_img")
+    )
+    # Row 2
+    kb.add(
+        InlineKeyboardButton("🛡️ Group Manage", callback_data="open_management"),
+        InlineKeyboardButton("🌤 Weather", callback_data="tool_weather")
+    )
+
+    # --- 2. 🔌 DYNAMIC PLUGINS (নতুন আপলোড করা টুলস) ---
+    dynamic_buttons = get_dynamic_tools()
+    
+    # বাটনগুলো সুন্দরভাবে ২ কলামে সাজানো
+    temp_row = []
+    for label, callback in dynamic_buttons:
+        temp_row.append(InlineKeyboardButton(label, callback_data=callback))
+        if len(temp_row) == 2:
+            kb.row(*temp_row)
+            temp_row = []
+    if temp_row: kb.row(*temp_row)
+
+    # --- 3. Navigation ---
     kb.add(InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu_return"))
     
-    return "🛠 **Select a Tool:**", kb
+    return "🛠 **Tools Menu:**\nSelect a tool from below:", kb
